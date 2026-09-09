@@ -101,37 +101,43 @@ local Colors = {
 local SPEED_AMOUNT = 50
 local FLY_SPEED = 58
 
+-- New simple Hay method:
+-- TP close -> face -> look -> click.
+local HAY_DISTANCE = 2.25
+local HAY_DWELL = 0.10
+local HAY_AFTER_CLICK = 0.08
+local HAY_CLICK_COUNT = 4
+
+-- Auto Farm
+local FARM_GRABS_BEFORE_SELL = 5
+local FARM_BETWEEN_HAY_DELAY = 0.055
+local FARM_AFTER_SELL_DELAY = 0.08
+
+-- Sell:
+-- TP close -> face -> look -> click.
+local SELL_DISTANCE = 2.15
+local SELL_DWELL = 0.16
+local SELL_AFTER_CLICK = 0.08
+local SELL_CLICK_COUNT = 5
+
+local SELL_COOLDOWN = 0.55
+local AUTO_SELL_INTERVAL = 2
+
+-- Other pickups still use the move-in-front method.
 local PICKUP_DISTANCE = 2.3
 local PICKUP_FRONT_DISTANCE = 4
 
--- Hay stays a little to the right.
-local HAY_RIGHT_OFFSET = 0.65
 local COLOR_HAY_RIGHT_OFFSET = 0.65
-
--- Needle was appearing too far left.
 local NEEDLE_RIGHT_OFFSET = 0.85
 
 local PICKUP_HOLD_AFTER_CLICK = 0.10
 
-local HAY_CLICK_COUNT = 5
 local COLOR_HAY_CLICK_COUNT = 6
 local DIAMOND_CLICK_COUNT = 7
 local KEY_CLICK_COUNT = 8
 local NEEDLE_CLICK_COUNT = 8
 
 local CLICK_GAP = 0.025
-
-local FARM_GRABS_BEFORE_SELL = 5
-local FARM_DELAY = 0.075
-local FARM_SELL_DELAY = 0.18
-
--- Simple Auto Sell:
--- TP close -> wait -> click real SellPart -> return.
-local SELL_DISTANCE = 2.2
-local SELL_DWELL = 0.14
-local SELL_CLICK_COUNT = 4
-local SELL_COOLDOWN = 0.65
-local AUTO_SELL_INTERVAL = 2
 
 local UFO_DISTANCE = 2.7
 
@@ -153,7 +159,7 @@ local VampauthClient
 
 local cleaning = false
 
--- All character-moving mods share this.
+-- All mods that teleport the player share this.
 local interactionBusy = false
 local interactionOwner = nil
 
@@ -169,7 +175,7 @@ local autoFindNeedleEnabled = false
 
 local noPickupCooldownEnabled = false
 
--- Manual only.
+-- Inf Range is MANUAL ONLY.
 local infRangeEnabled = false
 local infRangeClickBusy = false
 
@@ -203,20 +209,17 @@ local originalCameraMode = LocalPlayer.CameraMode
 local originalMinZoom = LocalPlayer.CameraMinZoomDistance
 local originalMaxZoom = LocalPlayer.CameraMaxZoomDistance
 
-local originalWalkSpeeds =
-	setmetatable({}, {
-		__mode = "k"
-	})
+local originalWalkSpeeds = setmetatable({}, {
+	__mode = "k"
+})
 
-local originalClickSettings =
-	setmetatable({}, {
-		__mode = "k"
-	})
+local originalClickSettings = setmetatable({}, {
+	__mode = "k"
+})
 
-local originalPromptSettings =
-	setmetatable({}, {
-		__mode = "k"
-	})
+local originalPromptSettings = setmetatable({}, {
+	__mode = "k"
+})
 
 --========================================================
 -- CACHES
@@ -229,15 +232,13 @@ local ufoCache = {}
 local keyCache = {}
 local needleCache = {}
 
-local colorHayState =
-	setmetatable({}, {
-		__mode = "k"
-	})
+local colorHayState = setmetatable({}, {
+	__mode = "k"
+})
 
-local colorHayConnections =
-	setmetatable({}, {
-		__mode = "k"
-	})
+local colorHayConnections = setmetatable({}, {
+	__mode = "k"
+})
 
 --========================================================
 -- QUEUES
@@ -248,34 +249,29 @@ local colorHayQueue = {}
 local keyQueue = {}
 local needleQueue = {}
 
-local diamondQueued =
-	setmetatable({}, {
-		__mode = "k"
-	})
+local diamondQueued = setmetatable({}, {
+	__mode = "k"
+})
 
-local colorHayQueued =
-	setmetatable({}, {
-		__mode = "k"
-	})
+local colorHayQueued = setmetatable({}, {
+	__mode = "k"
+})
 
-local keyQueued =
-	setmetatable({}, {
-		__mode = "k"
-	})
+local keyQueued = setmetatable({}, {
+	__mode = "k"
+})
 
-local needleQueued =
-	setmetatable({}, {
-		__mode = "k"
-	})
+local needleQueued = setmetatable({}, {
+	__mode = "k"
+})
 
 --========================================================
 -- RESERVATIONS
 --========================================================
 
-local reservations =
-	setmetatable({}, {
-		__mode = "k"
-	})
+local reservations = setmetatable({}, {
+	__mode = "k"
+})
 
 local function reserveObject(object, owner)
 	if not object
@@ -288,8 +284,7 @@ local function reserveObject(object, owner)
 		reservations[object]
 
 	if current then
-		if os.clock() - current.Time
-			< RESERVATION_TIMEOUT then
+		if os.clock() - current.Time < RESERVATION_TIMEOUT then
 
 			if current.Owner ~= owner then
 				return false
@@ -324,11 +319,8 @@ local function reservedByOther(object, owner)
 		return false
 	end
 
-	if os.clock() - current.Time
-		>= RESERVATION_TIMEOUT then
-
+	if os.clock() - current.Time >= RESERVATION_TIMEOUT then
 		reservations[object] = nil
-
 		return false
 	end
 
@@ -336,7 +328,7 @@ local function reservedByOther(object, owner)
 end
 
 --========================================================
--- NOTIFY FORWARD DECLARATION
+-- NOTIFY
 --========================================================
 
 local notify = function()
@@ -387,14 +379,9 @@ local function stroke(
 	thickness
 )
 	return create("UIStroke", {
-		Color =
-			color or Colors.Stroke,
-
-		Transparency =
-			transparency or 0.5,
-
-		Thickness =
-			thickness or 1,
+		Color = color or Colors.Stroke,
+		Transparency = transparency or 0.5,
+		Thickness = thickness or 1,
 
 		ApplyStrokeMode =
 			Enum.ApplyStrokeMode.Border,
@@ -412,28 +399,16 @@ local function padding(
 )
 	return create("UIPadding", {
 		PaddingLeft =
-			UDim.new(
-				0,
-				left or 0
-			),
+			UDim.new(0, left or 0),
 
 		PaddingRight =
-			UDim.new(
-				0,
-				right or 0
-			),
+			UDim.new(0, right or 0),
 
 		PaddingTop =
-			UDim.new(
-				0,
-				top or 0
-			),
+			UDim.new(0, top or 0),
 
 		PaddingBottom =
-			UDim.new(
-				0,
-				bottom or 0
-			),
+			UDim.new(0, bottom or 0),
 
 		Parent = object
 	})
@@ -447,20 +422,12 @@ local function addGlassGradient(object)
 			ColorSequence.new({
 				ColorSequenceKeypoint.new(
 					0,
-					Color3.fromRGB(
-						112,
-						115,
-						124
-					)
+					Color3.fromRGB(112, 115, 124)
 				),
 
 				ColorSequenceKeypoint.new(
 					1,
-					Color3.fromRGB(
-						68,
-						71,
-						79
-					)
+					Color3.fromRGB(68, 71, 79)
 				)
 			}),
 
@@ -489,7 +456,7 @@ local function copyText(text)
 end
 
 --========================================================
--- CHARACTER HELPERS
+-- CHARACTER
 --========================================================
 
 local function getCharacter()
@@ -577,9 +544,7 @@ local function getMainPart(object)
 	end
 
 	if object:IsA("Tool") then
-		return object:FindFirstChild(
-			"Handle"
-		)
+		return object:FindFirstChild("Handle")
 			or object:FindFirstChildWhichIsA(
 				"BasePart",
 				true
@@ -703,7 +668,7 @@ local function getPartFromObject(object)
 end
 
 --========================================================
--- SHARED INTERACTION LOCK
+-- INTERACTION LOCK
 --========================================================
 
 local function withInteractionLock(
@@ -712,6 +677,7 @@ local function withInteractionLock(
 	shouldContinue
 )
 	while interactionBusy do
+
 		if shouldContinue
 			and not shouldContinue() then
 
@@ -757,20 +723,25 @@ local function withInteractionLock(
 end
 
 --========================================================
--- CAMERA LOCK
+-- CAMERA LOOK HELPER
+--
+-- Makes the camera actually look at the target while
+-- THH clicks it, then restores the camera afterward.
 --========================================================
 
-local function lockCamera()
+local function lookCameraAtPart(part)
 	Camera =
 		Workspace.CurrentCamera
 		or Camera
 
-	if not Camera then
+	if not Camera
+		or not part then
+
 		return function()
 		end
 	end
 
-	local oldCameraType =
+	local oldType =
 		Camera.CameraType
 
 	local oldSubject =
@@ -782,27 +753,104 @@ local function lockCamera()
 	local oldFocus =
 		Camera.Focus
 
+	local head =
+		getHead()
+
+	local root =
+		getRoot()
+
+	local cameraPosition
+
+	if head then
+		cameraPosition =
+			head.Position
+			+ Vector3.new(
+				0,
+				0.25,
+				0
+			)
+
+	elseif root then
+		cameraPosition =
+			root.Position
+			+ Vector3.new(
+				0,
+				1.5,
+				0
+			)
+
+	else
+		cameraPosition =
+			oldCFrame.Position
+	end
+
 	Camera.CameraType =
 		Enum.CameraType.Scriptable
 
 	Camera.CFrame =
-		oldCFrame
+		CFrame.lookAt(
+			cameraPosition,
+			part.Position
+		)
 
 	Camera.Focus =
-		oldFocus
+		CFrame.new(
+			part.Position
+		)
 
 	local connection
 
 	connection =
 		RunService.RenderStepped:Connect(function()
 
-			if Camera then
-				Camera.CFrame =
-					oldCFrame
+			if not Camera
+				or not part
+				or not part.Parent then
 
-				Camera.Focus =
-					oldFocus
+				return
 			end
+
+			local currentHead =
+				getHead()
+
+			local currentRoot =
+				getRoot()
+
+			local position
+
+			if currentHead then
+				position =
+					currentHead.Position
+					+ Vector3.new(
+						0,
+						0.25,
+						0
+					)
+
+			elseif currentRoot then
+				position =
+					currentRoot.Position
+					+ Vector3.new(
+						0,
+						1.5,
+						0
+					)
+
+			else
+				position =
+					Camera.CFrame.Position
+			end
+
+			Camera.CFrame =
+				CFrame.lookAt(
+					position,
+					part.Position
+				)
+
+			Camera.Focus =
+				CFrame.new(
+					part.Position
+				)
 		end)
 
 	local restored =
@@ -841,13 +889,13 @@ local function lockCamera()
 				oldSubject
 
 			Camera.CameraType =
-				oldCameraType
+				oldType
 		end)
 	end
 end
 
 --========================================================
--- RANGE / COOLDOWN SETTINGS
+-- RANGE / COOLDOWN
 --========================================================
 
 local function rememberClickDetector(detector)
@@ -982,6 +1030,7 @@ local function applySettingsToObject(object)
 	for _, descendant in ipairs(
 		object:GetDescendants()
 	) do
+
 		applyInteractionObject(
 			descendant
 		)
@@ -992,6 +1041,7 @@ local function refreshCachedSettings()
 	for detector in pairs(
 		originalClickSettings
 	) do
+
 		if detector
 			and detector.Parent then
 
@@ -1004,6 +1054,7 @@ local function refreshCachedSettings()
 	for prompt in pairs(
 		originalPromptSettings
 	) do
+
 		if prompt
 			and prompt.Parent then
 
@@ -1013,43 +1064,27 @@ local function refreshCachedSettings()
 		end
 	end
 
-	for object in pairs(
-		hayCache
-	) do
+	for object in pairs(hayCache) do
 		if object.Parent then
-			applySettingsToObject(
-				object
-			)
+			applySettingsToObject(object)
 		end
 	end
 
-	for object in pairs(
-		diamondCache
-	) do
+	for object in pairs(diamondCache) do
 		if object.Parent then
-			applySettingsToObject(
-				object
-			)
+			applySettingsToObject(object)
 		end
 	end
 
-	for object in pairs(
-		keyCache
-	) do
+	for object in pairs(keyCache) do
 		if object.Parent then
-			applySettingsToObject(
-				object
-			)
+			applySettingsToObject(object)
 		end
 	end
 
-	for object in pairs(
-		needleCache
-	) do
+	for object in pairs(needleCache) do
 		if object.Parent then
-			applySettingsToObject(
-				object
-			)
+			applySettingsToObject(object)
 		end
 	end
 end
@@ -1058,6 +1093,7 @@ local function restoreInteractionSettings()
 	for detector, original in pairs(
 		originalClickSettings
 	) do
+
 		if detector
 			and detector.Parent then
 
@@ -1071,6 +1107,7 @@ local function restoreInteractionSettings()
 	for prompt, original in pairs(
 		originalPromptSettings
 	) do
+
 		if prompt
 			and prompt.Parent then
 
@@ -1092,7 +1129,7 @@ local function restoreInteractionSettings()
 end
 
 --========================================================
--- KEY / NEEDLE NAME HELPERS
+-- NAME HELPERS
 --========================================================
 
 local function normalizeName(name)
@@ -1112,9 +1149,7 @@ end
 
 local function isNeedleName(name)
 	local value =
-		normalizeName(
-			name
-		)
+		normalizeName(name)
 
 	return value ~= ""
 		and string.find(
@@ -1237,13 +1272,14 @@ local function clearQueuedTable(queued)
 	for object in pairs(
 		queued
 	) do
+
 		queued[object] =
 			nil
 	end
 end
 
 --========================================================
--- COLOR HAY TRACKING
+-- COLOR HAY TRACKER
 --========================================================
 
 local function setupColorHayTracker(hay)
@@ -1324,10 +1360,12 @@ local function setupColorHayTracker(hay)
 				newColor
 
 			if difference > 0.015 then
+
 				state.LastChanged =
 					os.clock()
 
 				if autoColorHayEnabled then
+
 					queueObject(
 						colorHayQueue,
 						colorHayQueued,
@@ -1347,7 +1385,7 @@ local function setupColorHayTracker(hay)
 end
 
 --========================================================
--- OBJECT REGISTRATION
+-- REGISTER OBJECTS
 --========================================================
 
 local function registerKeyCandidate(object)
@@ -1382,6 +1420,7 @@ local function registerKeyCandidate(object)
 	)
 
 	if autoFindKeyEnabled then
+
 		queueObject(
 			keyQueue,
 			keyQueued,
@@ -1425,6 +1464,7 @@ local function registerNeedleCandidate(object)
 	)
 
 	if autoFindNeedleEnabled then
+
 		queueObject(
 			needleQueue,
 			needleQueued,
@@ -1435,6 +1475,7 @@ end
 
 local function registerObject(object)
 	if object.Name == "HayPiece" then
+
 		if not hayCache[
 			object
 		] then
@@ -1454,6 +1495,7 @@ local function registerObject(object)
 	end
 
 	if object.Name == "Diamond" then
+
 		if not diamondCache[
 			object
 		] then
@@ -1467,6 +1509,7 @@ local function registerObject(object)
 			)
 
 			if autoDiamondEnabled then
+
 				queueObject(
 					diamondQueue,
 					diamondQueued,
@@ -1497,6 +1540,7 @@ local function registerObject(object)
 	if isNeedleName(
 		object.Name
 	) then
+
 		registerNeedleCandidate(
 			object
 		)
@@ -1534,57 +1578,37 @@ local function registerObject(object)
 end
 
 local function unregisterObject(object)
-	hayCache[object] =
-		nil
+	hayCache[object] = nil
+	diamondCache[object] = nil
+	sellCache[object] = nil
+	ufoCache[object] = nil
+	keyCache[object] = nil
+	needleCache[object] = nil
 
-	diamondCache[object] =
-		nil
+	diamondQueued[object] = nil
+	colorHayQueued[object] = nil
+	keyQueued[object] = nil
+	needleQueued[object] = nil
 
-	sellCache[object] =
-		nil
-
-	ufoCache[object] =
-		nil
-
-	keyCache[object] =
-		nil
-
-	needleCache[object] =
-		nil
-
-	diamondQueued[object] =
-		nil
-
-	colorHayQueued[object] =
-		nil
-
-	keyQueued[object] =
-		nil
-
-	needleQueued[object] =
-		nil
-
-	colorHayState[object] =
-		nil
-
-	reservations[object] =
-		nil
+	colorHayState[object] = nil
+	reservations[object] = nil
 end
 
 --========================================================
--- ONE INITIAL WORKSPACE SCAN
+-- ONE INITIAL SCAN
 --========================================================
 
 for _, object in ipairs(
 	Workspace:GetDescendants()
 ) do
+
 	registerObject(
 		object
 	)
 end
 
 --========================================================
--- EVENT-BASED TRACKING
+-- EVENT BASED TRACKING
 --========================================================
 
 track(
@@ -1595,6 +1619,7 @@ track(
 		)
 
 		task.defer(function()
+
 			if not object
 				or not object.Parent then
 
@@ -1633,7 +1658,7 @@ track(
 )
 
 --========================================================
--- CHARACTER TELEPORT
+-- TELEPORT + FACE TARGET
 --========================================================
 
 local function teleportCharacterNear(
@@ -1654,8 +1679,7 @@ local function teleportCharacterNear(
 	end
 
 	distance =
-		distance
-		or PICKUP_DISTANCE
+		distance or 2.25
 
 	local direction =
 		Vector3.new(
@@ -1669,6 +1693,7 @@ local function teleportCharacterNear(
 		)
 
 	if direction.Magnitude < 0.1 then
+
 		direction =
 			Vector3.new(
 				0,
@@ -1680,29 +1705,30 @@ local function teleportCharacterNear(
 	direction =
 		direction.Unit
 
-	local target =
+	local targetPosition =
 		position
 		+ direction * distance
 
-	target =
+	targetPosition =
 		Vector3.new(
-			target.X,
+			targetPosition.X,
 			position.Y + 2.6,
-			target.Z
+			targetPosition.Z
 		)
 
-	local lookAt =
+	local lookPosition =
 		Vector3.new(
 			position.X,
-			target.Y,
+			targetPosition.Y,
 			position.Z
 		)
 
 	pcall(function()
+
 		character:PivotTo(
 			CFrame.lookAt(
-				target,
-				lookAt
+				targetPosition,
+				lookPosition
 			)
 		)
 	end)
@@ -1712,8 +1738,463 @@ local function teleportCharacterNear(
 	return true
 end
 
+local function faceCharacterAt(
+	position
+)
+	local character =
+		getCharacter()
+
+	local root =
+		getRoot()
+
+	if not character
+		or not root
+		or not position then
+
+		return
+	end
+
+	local flatTarget =
+		Vector3.new(
+			position.X,
+			root.Position.Y,
+			position.Z
+		)
+
+	if (
+		flatTarget
+		- root.Position
+	).Magnitude < 0.01 then
+
+		return
+	end
+
+	pcall(function()
+
+		character:PivotTo(
+			CFrame.lookAt(
+				root.Position,
+				flatTarget
+			)
+		)
+	end)
+
+	stopVelocity()
+end
+
 --========================================================
--- MOVE PICKUP IN FRONT
+-- CLICK
+--========================================================
+
+local function directClick(detector)
+	if not detector
+		or not detector.Parent then
+
+		return false
+	end
+
+	applyClickDetector(
+		detector
+	)
+
+	if type(fireclickdetector)
+		== "function" then
+
+		return pcall(function()
+
+			fireclickdetector(
+				detector
+			)
+		end)
+	end
+
+	return false
+end
+
+local function firePrompt(prompt)
+	if not prompt
+		or not prompt.Parent then
+
+		return false
+	end
+
+	applyPrompt(
+		prompt
+	)
+
+	if type(fireproximityprompt)
+		== "function" then
+
+		return pcall(function()
+
+			fireproximityprompt(
+				prompt
+			)
+		end)
+	end
+
+	return pcall(function()
+
+		prompt:InputHoldBegin()
+
+		task.wait(
+			noPickupCooldownEnabled
+				and 0
+				or math.min(
+					prompt.HoldDuration,
+					0.1
+				)
+		)
+
+		prompt:InputHoldEnd()
+	end)
+end
+
+local function screenClickPart(part)
+	if not part
+		or not part.Parent then
+
+		return false
+	end
+
+	Camera =
+		Workspace.CurrentCamera
+		or Camera
+
+	if not Camera then
+		return false
+	end
+
+	local position, visible =
+		Camera:WorldToViewportPoint(
+			part.Position
+		)
+
+	if not visible
+		or position.Z <= 0 then
+
+		return false
+	end
+
+	if VirtualInputManager then
+
+		local success =
+			pcall(function()
+
+				VirtualInputManager:SendMouseButtonEvent(
+					position.X,
+					position.Y,
+					0,
+					true,
+					game,
+					0
+				)
+
+				RunService.Heartbeat:Wait()
+
+				VirtualInputManager:SendMouseButtonEvent(
+					position.X,
+					position.Y,
+					0,
+					false,
+					game,
+					0
+				)
+			end)
+
+		if success then
+			return true
+		end
+	end
+
+	if type(mousemoveabs)
+			== "function"
+		and type(mouse1click)
+			== "function" then
+
+		return pcall(function()
+
+			mousemoveabs(
+				position.X,
+				position.Y
+			)
+
+			mouse1click()
+		end)
+	end
+
+	return false
+end
+
+local function clickTarget(
+	object,
+	clickCount,
+	shouldContinue
+)
+	if not object
+		or not object.Parent then
+
+		return false
+	end
+
+	local clicked =
+		false
+
+	for _ = 1, clickCount do
+
+		if shouldContinue
+			and not shouldContinue() then
+
+			break
+		end
+
+		if not object.Parent then
+			return true
+		end
+
+		local success =
+			false
+
+		local detector =
+			getClickDetector(
+				object
+			)
+
+		if detector then
+
+			success =
+				directClick(
+					detector
+				)
+		end
+
+		if not success then
+
+			local prompt =
+				getPrompt(
+					object
+				)
+
+			if prompt then
+
+				success =
+					firePrompt(
+						prompt
+					)
+			end
+		end
+
+		if not success then
+
+			local part =
+				getMainPart(
+					object
+				)
+
+			if part then
+
+				success =
+					screenClickPart(
+						part
+					)
+			end
+		end
+
+		if success then
+			clicked =
+				true
+		end
+
+		if noPickupCooldownEnabled then
+			RunService.Heartbeat:Wait()
+		else
+
+			task.wait(
+				CLICK_GAP
+			)
+		end
+	end
+
+	return clicked
+end
+
+--========================================================
+-- NEW HAY METHOD
+--
+-- NO MOVING HAY.
+--
+-- TP TO REAL HAY
+-- FACE HAY
+-- CAMERA LOOKS AT HAY
+-- CLICK HAY
+--
+-- ReturnPlayer:
+-- false for Auto Farm / Auto Hay so it goes Hay -> Hay.
+-- true if needed for another use.
+--========================================================
+
+local function teleportLookClickHay(
+	hay,
+	owner,
+	shouldContinue,
+	returnPlayer
+)
+	if not hay
+		or not hay.Parent then
+
+		return false
+	end
+
+	if not reserveObject(
+		hay,
+		owner
+	) then
+
+		return false
+	end
+
+	local result =
+		withInteractionLock(
+			owner,
+
+			function()
+
+				if shouldContinue
+					and not shouldContinue() then
+
+					return false
+				end
+
+				if not hay.Parent then
+					return true
+				end
+
+				local character =
+					getCharacter()
+
+				local part =
+					getMainPart(
+						hay
+					)
+
+				if not character
+					or not part then
+
+					return false
+				end
+
+				local oldPivot
+
+				if returnPlayer then
+
+					oldPivot =
+						character:GetPivot()
+				end
+
+				----------------------------------------
+				-- TP CLOSE TO REAL HAY
+				----------------------------------------
+
+				teleportCharacterNear(
+					part.Position,
+					HAY_DISTANCE
+				)
+
+				faceCharacterAt(
+					part.Position
+				)
+
+				stopVelocity()
+
+				task.wait(
+					noPickupCooldownEnabled
+						and 0.025
+						or HAY_DWELL
+				)
+
+				if not hay.Parent then
+
+					if returnPlayer
+						and oldPivot
+						and character.Parent then
+
+						character:PivotTo(
+							oldPivot
+						)
+					end
+
+					return true
+				end
+
+				----------------------------------------
+				-- LOOK DIRECTLY AT HAY
+				----------------------------------------
+
+				local restoreCamera =
+					lookCameraAtPart(
+						part
+					)
+
+				RunService.RenderStepped:Wait()
+
+				----------------------------------------
+				-- CLICK HAY
+				----------------------------------------
+
+				local clicked =
+					clickTarget(
+						hay,
+						HAY_CLICK_COUNT,
+						shouldContinue
+					)
+
+				task.wait(
+					HAY_AFTER_CLICK
+				)
+
+				restoreCamera()
+
+				----------------------------------------
+				-- OPTIONAL RETURN
+				----------------------------------------
+
+				if returnPlayer
+					and oldPivot
+					and character.Parent then
+
+					pcall(function()
+
+						character:PivotTo(
+							oldPivot
+						)
+					end)
+
+					stopVelocity()
+				end
+
+				return clicked
+			end,
+
+			shouldContinue
+		)
+
+	releaseObject(
+		hay,
+		owner
+	)
+
+	return result
+end
+
+--========================================================
+-- OTHER PICKUPS
+--
+-- Keeps move-in-front system for:
+-- Color Hay
+-- Diamond
+-- Key
+-- Needle
+-- Manual Inf Range
 --========================================================
 
 local function movePickupInFront(
@@ -1745,6 +2226,7 @@ local function movePickupInFront(
 		or 0
 
 	if Camera then
+
 		return setObjectPivot(
 			object,
 
@@ -1761,6 +2243,7 @@ local function movePickupInFront(
 		getHead()
 
 	if head then
+
 		return setObjectPivot(
 			object,
 
@@ -1775,10 +2258,6 @@ local function movePickupInFront(
 
 	return false
 end
-
---========================================================
--- KEEP PICKUP STABLE IN FRONT
---========================================================
 
 local function startHoldingPickup(
 	object,
@@ -1829,11 +2308,10 @@ local function startHoldingPickup(
 		RunService.Heartbeat:Connect(function()
 
 			if not active then
+
 				if connection then
 					connection:Disconnect()
-
-					connection =
-						nil
+					connection = nil
 				end
 
 				return
@@ -1843,10 +2321,12 @@ local function startHoldingPickup(
 		end)
 
 	return function()
+
 		active =
 			false
 
 		if connection then
+
 			pcall(function()
 				connection:Disconnect()
 			end)
@@ -1856,248 +2336,6 @@ local function startHoldingPickup(
 		end
 	end
 end
-
---========================================================
--- CLICK HELPERS
---========================================================
-
-local function directClick(detector)
-	if not detector
-		or not detector.Parent then
-
-		return false
-	end
-
-	applyClickDetector(
-		detector
-	)
-
-	if type(fireclickdetector) == "function" then
-		return pcall(function()
-			fireclickdetector(
-				detector
-			)
-		end)
-	end
-
-	return false
-end
-
-local function firePrompt(prompt)
-	if not prompt
-		or not prompt.Parent then
-
-		return false
-	end
-
-	applyPrompt(
-		prompt
-	)
-
-	if type(fireproximityprompt) == "function" then
-		return pcall(function()
-			fireproximityprompt(
-				prompt
-			)
-		end)
-	end
-
-	return pcall(function()
-		prompt:InputHoldBegin()
-
-		task.wait(
-			noPickupCooldownEnabled
-				and 0
-				or math.min(
-					prompt.HoldDuration,
-					0.1
-				)
-		)
-
-		prompt:InputHoldEnd()
-	end)
-end
-
-local function screenClickPart(part)
-	if not part
-		or not part.Parent then
-
-		return false
-	end
-
-	Camera =
-		Workspace.CurrentCamera
-		or Camera
-
-	if not Camera then
-		return false
-	end
-
-	local position, visible =
-		Camera:WorldToViewportPoint(
-			part.Position
-		)
-
-	if not visible
-		or position.Z <= 0 then
-
-		return false
-	end
-
-	if VirtualInputManager then
-		local success =
-			pcall(function()
-				VirtualInputManager:SendMouseButtonEvent(
-					position.X,
-					position.Y,
-					0,
-					true,
-					game,
-					0
-				)
-
-				RunService.Heartbeat:Wait()
-
-				VirtualInputManager:SendMouseButtonEvent(
-					position.X,
-					position.Y,
-					0,
-					false,
-					game,
-					0
-				)
-			end)
-
-		if success then
-			return true
-		end
-	end
-
-	if type(mousemoveabs) == "function"
-		and type(mouse1click) == "function" then
-
-		return pcall(function()
-			mousemoveabs(
-				position.X,
-				position.Y
-			)
-
-			mouse1click()
-		end)
-	end
-
-	return false
-end
-
-local function clickObject(
-	object,
-	clickCount,
-	shouldContinue,
-	allowScreenFallback
-)
-	if not object
-		or not object.Parent then
-
-		return false
-	end
-
-	if allowScreenFallback == nil then
-		allowScreenFallback =
-			true
-	end
-
-	local clicked =
-		false
-
-	for _ = 1, clickCount do
-		if shouldContinue
-			and not shouldContinue() then
-
-			break
-		end
-
-		if not object.Parent then
-			return true
-		end
-
-		local success =
-			false
-
-		local detector =
-			getClickDetector(
-				object
-			)
-
-		if detector then
-			success =
-				directClick(
-					detector
-				)
-		end
-
-		if not success then
-			local prompt =
-				getPrompt(
-					object
-				)
-
-			if prompt then
-				success =
-					firePrompt(
-						prompt
-					)
-			end
-		end
-
-		if not success
-			and allowScreenFallback then
-
-			local part =
-				getMainPart(
-					object
-				)
-
-			if part then
-				success =
-					screenClickPart(
-						part
-					)
-			end
-		end
-
-		if success then
-			clicked =
-				true
-		end
-
-		if noPickupCooldownEnabled then
-			RunService.Heartbeat:Wait()
-		else
-			task.wait(
-				CLICK_GAP
-			)
-		end
-	end
-
-	return clicked
-end
-
---========================================================
--- SHARED PICKUP SYSTEM
---
--- REAL FLOW:
---
--- 1. Save player.
--- 2. Save item.
--- 3. Lock camera.
--- 4. TP close to REAL original item.
--- 5. Keep item stable in front.
--- 6. Click it.
--- 7. Keep it there slightly longer.
--- 8. Restore item if it still exists.
--- 9. Return player.
--- 10. Restore camera.
---========================================================
 
 local function pickupObject(
 	object,
@@ -2152,9 +2390,6 @@ local function pickupObject(
 				local character =
 					getCharacter()
 
-				local root =
-					getRoot()
-
 				local interactionPart =
 					options.InteractionPart
 					or getMainPart(
@@ -2162,7 +2397,6 @@ local function pickupObject(
 					)
 
 				if not character
-					or not root
 					or not interactionPart then
 
 					return false
@@ -2180,11 +2414,35 @@ local function pickupObject(
 					return false
 				end
 
-				local unlockCamera =
-					lockCamera()
+				local oldCameraType
+				local oldCameraSubject
+				local oldCameraCFrame
+				local oldCameraFocus
+
+				Camera =
+					Workspace.CurrentCamera
+					or Camera
+
+				if Camera then
+
+					oldCameraType =
+						Camera.CameraType
+
+					oldCameraSubject =
+						Camera.CameraSubject
+
+					oldCameraCFrame =
+						Camera.CFrame
+
+					oldCameraFocus =
+						Camera.Focus
+
+					Camera.CameraType =
+						Enum.CameraType.Scriptable
+				end
 
 				----------------------------------------
-				-- TP CLOSE TO REAL ITEM
+				-- TP TO REAL ITEM
 				----------------------------------------
 
 				teleportCharacterNear(
@@ -2193,8 +2451,6 @@ local function pickupObject(
 					options.Distance
 						or PICKUP_DISTANCE
 				)
-
-				stopVelocity()
 
 				task.wait(
 					noPickupCooldownEnabled
@@ -2205,36 +2461,28 @@ local function pickupObject(
 				if not object.Parent then
 
 					if character.Parent then
-						pcall(function()
-							character:PivotTo(
-								oldCharacterPivot
-							)
-						end)
-
-						stopVelocity()
+						character:PivotTo(
+							oldCharacterPivot
+						)
 					end
 
-					unlockCamera()
+					if Camera
+						and oldCameraType then
+
+						Camera.CameraType =
+							oldCameraType
+
+						Camera.CameraSubject =
+							oldCameraSubject
+
+						Camera.CFrame =
+							oldCameraCFrame
+
+						Camera.Focus =
+							oldCameraFocus
+					end
 
 					return true
-				end
-
-				if shouldContinue
-					and not shouldContinue() then
-
-					if character.Parent then
-						pcall(function()
-							character:PivotTo(
-								oldCharacterPivot
-							)
-						end)
-
-						stopVelocity()
-					end
-
-					unlockCamera()
-
-					return false
 				end
 
 				----------------------------------------
@@ -2265,20 +2513,14 @@ local function pickupObject(
 				----------------------------------------
 
 				local clicked =
-					clickObject(
+					clickTarget(
 						object,
 
 						options.ClickCount
-							or HAY_CLICK_COUNT,
+							or 5,
 
-						shouldContinue,
-
-						options.AllowScreenFallback
+						shouldContinue
 					)
-
-				----------------------------------------
-				-- KEEP ITEM THERE AFTER CLICK
-				----------------------------------------
 
 				local holdUntil =
 					os.clock()
@@ -2302,7 +2544,7 @@ local function pickupObject(
 				stopHolding()
 
 				----------------------------------------
-				-- RESTORE ITEM IF STILL THERE
+				-- RESTORE ITEM
 				----------------------------------------
 
 				if object
@@ -2322,6 +2564,7 @@ local function pickupObject(
 					and character.Parent then
 
 					pcall(function()
+
 						character:PivotTo(
 							oldCharacterPivot
 						)
@@ -2330,7 +2573,28 @@ local function pickupObject(
 					stopVelocity()
 				end
 
-				unlockCamera()
+				----------------------------------------
+				-- RESTORE CAMERA
+				----------------------------------------
+
+				if Camera
+					and oldCameraType then
+
+					pcall(function()
+
+						Camera.CameraSubject =
+							oldCameraSubject
+
+						Camera.CFrame =
+							oldCameraCFrame
+
+						Camera.Focus =
+							oldCameraFocus
+
+						Camera.CameraType =
+							oldCameraType
+					end)
+				end
 
 				return clicked
 			end,
@@ -2369,6 +2633,7 @@ local function getNearestFromCache(
 	for object in pairs(
 		cache
 	) do
+
 		if object
 			and object.Parent
 			and (
@@ -2386,6 +2651,7 @@ local function getNearestFromCache(
 				)
 
 			if part then
+
 				local distance =
 					(
 						root.Position
@@ -2393,6 +2659,7 @@ local function getNearestFromCache(
 					).Magnitude
 
 				if distance < closestDistance then
+
 					closestDistance =
 						distance
 
@@ -2445,6 +2712,7 @@ local function getSellSearchObjects(
 	for _, object in ipairs(
 		sellPart:GetDescendants()
 	) do
+
 		addUnique(
 			list,
 			seen,
@@ -2467,6 +2735,7 @@ local function getSellSearchObjects(
 		for _, object in ipairs(
 			parent:GetDescendants()
 		) do
+
 			addUnique(
 				list,
 				seen,
@@ -2500,7 +2769,7 @@ local function scanSellPart(
 			nil
 	}
 
-	local sellMainPart =
+	local main =
 		getMainPart(
 			sellPart
 		)
@@ -2513,6 +2782,7 @@ local function scanSellPart(
 			sellPart
 		)
 	) do
+
 		if object:IsA("ClickDetector") then
 
 			local part =
@@ -2523,7 +2793,7 @@ local function scanSellPart(
 			local score =
 				20
 
-			if part == sellMainPart then
+			if part == main then
 				score =
 					0
 
@@ -2539,6 +2809,7 @@ local function scanSellPart(
 			end
 
 			if score < bestScore then
+
 				bestScore =
 					score
 
@@ -2546,12 +2817,14 @@ local function scanSellPart(
 					object
 
 				if part then
+
 					result.InteractionPart =
 						part
 				end
 			end
 
 		elseif object:IsA("ProximityPrompt") then
+
 			result.Prompt =
 				result.Prompt
 				or object
@@ -2562,25 +2835,25 @@ local function scanSellPart(
 end
 
 --========================================================
--- SIMPLE AUTO SELL
+-- NEW SELL METHOD
 --
--- This is the simpler version:
+-- TP CLOSE
+-- FACE SELLPART
+-- CAMERA LOOKS AT SELLPART
+-- CLICK
 --
--- save player
--- TP close to REAL SellPart
--- stay close briefly
--- click real SellPart interaction
--- return player
+-- ReturnPlayer = true:
+-- standalone Auto Sell returns you.
 --
--- NO CAMERA LOCK
--- NO MOVING SELLPART
--- NO ROOT ANCHOR
+-- ReturnPlayer = false:
+-- Auto Farm stays there then continues to next Hay.
 --========================================================
 
 local function sellOnePart(
 	sellPart,
 	owner,
-	shouldContinue
+	shouldContinue,
+	returnPlayer
 )
 	if not sellPart
 		or not sellPart.Parent then
@@ -2589,8 +2862,7 @@ local function sellOnePart(
 	end
 
 	owner =
-		owner
-		or "Auto Sell"
+		owner or "Auto Sell"
 
 	if shouldContinue
 		and not shouldContinue() then
@@ -2642,36 +2914,39 @@ local function sellOnePart(
 				local character =
 					getCharacter()
 
-				local root =
-					getRoot()
-
 				local humanoid =
 					getHumanoid()
 
 				if not character
-					or not root
 					or not interactionPart then
 
 					return false
 				end
 
-				local oldPlayerPivot =
-					character:GetPivot()
+				local oldPlayerPivot
+
+				if returnPlayer then
+
+					oldPlayerPivot =
+						character:GetPivot()
+				end
 
 				local oldAutoRotate
 
 				if humanoid then
+
 					oldAutoRotate =
 						humanoid.AutoRotate
 
 					pcall(function()
+
 						humanoid.AutoRotate =
 							false
 					end)
 				end
 
 				----------------------------------------
-				-- TP CLOSE TO REAL SELL PART
+				-- TP CLOSE TO REAL SELLPART
 				----------------------------------------
 
 				teleportCharacterNear(
@@ -2679,14 +2954,30 @@ local function sellOnePart(
 					SELL_DISTANCE
 				)
 
+				faceCharacterAt(
+					interactionPart.Position
+				)
+
 				stopVelocity()
 
+				-- Important: actually stay close.
 				task.wait(
 					SELL_DWELL
 				)
 
 				----------------------------------------
-				-- CLICK REAL SELL INTERACTION
+				-- LOOK AT SELLPART
+				----------------------------------------
+
+				local restoreCamera =
+					lookCameraAtPart(
+						interactionPart
+					)
+
+				RunService.RenderStepped:Wait()
+
+				----------------------------------------
+				-- CLICK
 				----------------------------------------
 
 				local clicked =
@@ -2705,7 +2996,7 @@ local function sellOnePart(
 								true
 						end
 
-						task.wait(0.035)
+						task.wait(0.03)
 					end
 				end
 
@@ -2735,20 +3026,26 @@ local function sellOnePart(
 								true
 						end
 
-						task.wait(0.035)
+						task.wait(0.03)
 					end
 				end
 
-				task.wait(0.06)
+				task.wait(
+					SELL_AFTER_CLICK
+				)
+
+				restoreCamera()
 
 				----------------------------------------
-				-- RETURN PLAYER
+				-- RETURN ONLY FOR STANDALONE AUTO SELL
 				----------------------------------------
 
-				if character
+				if returnPlayer
+					and oldPlayerPivot
 					and character.Parent then
 
 					pcall(function()
+
 						character:PivotTo(
 							oldPlayerPivot
 						)
@@ -2762,12 +3059,14 @@ local function sellOnePart(
 					and oldAutoRotate ~= nil then
 
 					pcall(function()
+
 						humanoid.AutoRotate =
 							oldAutoRotate
 					end)
 				end
 
 				if clicked then
+
 					lastSellTime =
 						os.clock()
 				end
@@ -2788,7 +3087,8 @@ end
 
 local function sellNow(
 	owner,
-	shouldContinue
+	shouldContinue,
+	returnPlayer
 )
 	local sellPart =
 		getNearestFromCache(
@@ -2804,17 +3104,23 @@ local function sellNow(
 	return sellOnePart(
 		sellPart,
 		owner,
-		shouldContinue
+		shouldContinue,
+		returnPlayer
 	)
 end
 
 --========================================================
 -- AUTO FARM
 --
--- ONE HAY AT A TIME
--- HAY STAYS IN FRONT
--- SLIGHTLY RIGHT
--- 5 GRABS THEN SELL
+-- HAY 1
+-- HAY 2
+-- HAY 3
+-- HAY 4
+-- HAY 5
+-- SELL
+-- NEXT HAY
+--
+-- Does NOT TP back between Hay.
 --========================================================
 
 local function startAutoFarm()
@@ -2840,9 +3146,13 @@ local function startAutoFarm()
 			local attempts =
 				0
 
+			--------------------------------------------
+			-- PICK FIVE HAY
+			--------------------------------------------
+
 			while autoFarmEnabled
 				and grabs < FARM_GRABS_BEFORE_SELL
-				and attempts < 18 do
+				and attempts < 20 do
 
 				attempts +=
 					1
@@ -2855,6 +3165,7 @@ local function startAutoFarm()
 					)
 
 				if not hay then
+
 					task.wait(0.1)
 					break
 				end
@@ -2864,38 +3175,17 @@ local function startAutoFarm()
 				] = true
 
 				local success =
-					pickupObject(
+					teleportLookClickHay(
 						hay,
-						{
-							Owner =
-								"Auto Farm",
+						"Auto Farm",
 
-							ShouldContinue =
-								function()
-									return autoFarmEnabled
-								end,
+						function()
+							return autoFarmEnabled
+						end,
 
-							Distance =
-								PICKUP_DISTANCE,
-
-							FrontDistance =
-								PICKUP_FRONT_DISTANCE,
-
-							RightOffset =
-								HAY_RIGHT_OFFSET,
-
-							VerticalOffset =
-								0,
-
-							HoldAfterClick =
-								PICKUP_HOLD_AFTER_CLICK,
-
-							ClickCount =
-								HAY_CLICK_COUNT,
-
-							AllowScreenFallback =
-								true
-						}
+						-- DON'T return.
+						-- Go straight to next Hay.
+						false
 					)
 
 				if success
@@ -2907,10 +3197,14 @@ local function startAutoFarm()
 
 				task.wait(
 					noPickupCooldownEnabled
-						and 0.02
-						or FARM_DELAY
+						and 0.015
+						or FARM_BETWEEN_HAY_DELAY
 				)
 			end
+
+			--------------------------------------------
+			-- AFTER FIVE -> SELL
+			--------------------------------------------
 
 			if autoFarmEnabled
 				and grabs >= FARM_GRABS_BEFORE_SELL then
@@ -2920,13 +3214,19 @@ local function startAutoFarm()
 
 					function()
 						return autoFarmEnabled
-					end
+					end,
+
+					-- DON'T return to old position.
+					-- After selling the next loop goes
+					-- directly to the next Hay.
+					false
 				)
 
 				task.wait(
-					FARM_SELL_DELAY
+					FARM_AFTER_SELL_DELAY
 				)
 			else
+
 				task.wait(0.1)
 			end
 		end
@@ -2940,6 +3240,8 @@ end
 
 --========================================================
 -- AUTO PICK UP HAY
+--
+-- TP -> LOOK -> CLICK -> NEXT HAY
 --========================================================
 
 local function startAutoHay()
@@ -2964,41 +3266,28 @@ local function startAutoHay()
 				)
 
 			if hay then
-				pickupObject(
+
+				teleportLookClickHay(
 					hay,
-					{
-						Owner =
-							"Auto Hay",
+					"Auto Hay",
 
-						ShouldContinue =
-							function()
-								return autoHayEnabled
-							end,
+					function()
+						return autoHayEnabled
+					end,
 
-						Distance =
-							PICKUP_DISTANCE,
-
-						FrontDistance =
-							PICKUP_FRONT_DISTANCE,
-
-						RightOffset =
-							HAY_RIGHT_OFFSET,
-
-						HoldAfterClick =
-							PICKUP_HOLD_AFTER_CLICK,
-
-						ClickCount =
-							HAY_CLICK_COUNT,
-
-						AllowScreenFallback =
-							true
-					}
+					-- Stay there and go to next Hay.
+					false
 				)
 			else
+
 				task.wait(0.12)
 			end
 
-			task.wait(0.075)
+			task.wait(
+				noPickupCooldownEnabled
+					and 0.015
+					or 0.055
+			)
 		end
 	end)
 end
@@ -3009,7 +3298,14 @@ local function stopAutoHay()
 end
 
 --========================================================
--- AUTO SELL LOOP
+-- AUTO SELL
+--
+-- STANDALONE:
+-- save position
+-- TP SellPart
+-- face/look
+-- click
+-- TP back
 --========================================================
 
 local function startAutoSell()
@@ -3031,7 +3327,10 @@ local function startAutoSell()
 
 				function()
 					return autoSellEnabled
-				end
+				end,
+
+				-- Standalone Auto Sell returns you.
+				true
 			)
 
 			local started =
@@ -3081,7 +3380,9 @@ local function startAutoDiamond()
 	for diamond in pairs(
 		diamondCache
 	) do
+
 		if diamond.Parent then
+
 			queueObject(
 				diamondQueue,
 				diamondQueued,
@@ -3104,11 +3405,13 @@ local function startAutoDiamond()
 				)
 
 			if diamond then
+
 				diamondQueued[
 					diamond
 				] = nil
 
 				if diamond.Parent then
+
 					pickupObject(
 						diamond,
 						{
@@ -3117,6 +3420,7 @@ local function startAutoDiamond()
 
 							ShouldContinue =
 								function()
+
 									return autoDiamondEnabled
 										and diamondRunId == runId
 								end,
@@ -3134,14 +3438,12 @@ local function startAutoDiamond()
 								0.10,
 
 							ClickCount =
-								DIAMOND_CLICK_COUNT,
-
-							AllowScreenFallback =
-								true
+								DIAMOND_CLICK_COUNT
 						}
 					)
 				end
 			else
+
 				task.wait(0.1)
 			end
 		end
@@ -3165,7 +3467,7 @@ local function stopAutoDiamond()
 end
 
 --========================================================
--- AUTO COLOR / RAINBOW HAY
+-- AUTO COLOR HAY
 --========================================================
 
 local function startAutoColorHay()
@@ -3193,6 +3495,7 @@ local function startAutoColorHay()
 	for hay, state in pairs(
 		colorHayState
 	) do
+
 		if hay.Parent
 			and state.LastChanged > 0
 			and os.clock() - state.LastChanged
@@ -3220,11 +3523,13 @@ local function startAutoColorHay()
 				)
 
 			if hay then
+
 				colorHayQueued[
 					hay
 				] = nil
 
 				if hay.Parent then
+
 					pickupObject(
 						hay,
 						{
@@ -3233,6 +3538,7 @@ local function startAutoColorHay()
 
 							ShouldContinue =
 								function()
+
 									return autoColorHayEnabled
 										and colorHayRunId == runId
 								end,
@@ -3250,14 +3556,12 @@ local function startAutoColorHay()
 								0.12,
 
 							ClickCount =
-								COLOR_HAY_CLICK_COUNT,
-
-							AllowScreenFallback =
-								true
+								COLOR_HAY_CLICK_COUNT
 						}
 					)
 				end
 			else
+
 				task.wait(0.06)
 			end
 		end
@@ -3281,7 +3585,7 @@ local function stopAutoColorHay()
 end
 
 --========================================================
--- AUTO FIND KEY
+-- AUTO KEY
 --========================================================
 
 local function startAutoFindKey()
@@ -3309,7 +3613,9 @@ local function startAutoFindKey()
 	for key in pairs(
 		keyCache
 	) do
+
 		if key.Parent then
+
 			queueObject(
 				keyQueue,
 				keyQueued,
@@ -3332,53 +3638,42 @@ local function startAutoFindKey()
 				)
 
 			if key then
+
 				keyQueued[
 					key
 				] = nil
 
 				if key.Parent then
-					local success =
-						pickupObject(
-							key,
-							{
-								Owner =
-									"Auto Key",
 
-								ShouldContinue =
-									function()
-										return autoFindKeyEnabled
-											and keyRunId == runId
-									end,
+					pickupObject(
+						key,
+						{
+							Owner =
+								"Auto Key",
 
-								Distance =
-									2.1,
+							ShouldContinue =
+								function()
 
-								FrontDistance =
-									3.8,
+									return autoFindKeyEnabled
+										and keyRunId == runId
+								end,
 
-								RightOffset =
-									0,
+							Distance =
+								2.1,
 
-								HoldAfterClick =
-									0.12,
+							FrontDistance =
+								3.8,
 
-								ClickCount =
-									KEY_CLICK_COUNT,
+							RightOffset =
+								0,
 
-								AllowScreenFallback =
-									true
-							}
-						)
+							HoldAfterClick =
+								0.12,
 
-					if success
-						and not key.Parent then
-
-						notify(
-							"Auto Find Key",
-							"Key picked up.",
-							2
-						)
-					end
+							ClickCount =
+								KEY_CLICK_COUNT
+						}
+					)
 
 					if key.Parent
 						and autoFindKeyEnabled
@@ -3403,6 +3698,7 @@ local function startAutoFindKey()
 					end
 				end
 			else
+
 				task.wait(0.1)
 			end
 		end
@@ -3426,9 +3722,7 @@ local function stopAutoFindKey()
 end
 
 --========================================================
--- AUTO FIND NEEDLE
---
--- SLIGHTLY MORE TO THE RIGHT
+-- AUTO NEEDLE
 --========================================================
 
 local function startAutoFindNeedle()
@@ -3456,7 +3750,9 @@ local function startAutoFindNeedle()
 	for needle in pairs(
 		needleCache
 	) do
+
 		if needle.Parent then
+
 			queueObject(
 				needleQueue,
 				needleQueued,
@@ -3479,53 +3775,42 @@ local function startAutoFindNeedle()
 				)
 
 			if needle then
+
 				needleQueued[
 					needle
 				] = nil
 
 				if needle.Parent then
-					local success =
-						pickupObject(
-							needle,
-							{
-								Owner =
-									"Auto Needle",
 
-								ShouldContinue =
-									function()
-										return autoFindNeedleEnabled
-											and needleRunId == runId
-									end,
+					pickupObject(
+						needle,
+						{
+							Owner =
+								"Auto Needle",
 
-								Distance =
-									2.1,
+							ShouldContinue =
+								function()
 
-								FrontDistance =
-									3.8,
+									return autoFindNeedleEnabled
+										and needleRunId == runId
+								end,
 
-								RightOffset =
-									NEEDLE_RIGHT_OFFSET,
+							Distance =
+								2.1,
 
-								HoldAfterClick =
-									0.12,
+							FrontDistance =
+								3.8,
 
-								ClickCount =
-									NEEDLE_CLICK_COUNT,
+							RightOffset =
+								NEEDLE_RIGHT_OFFSET,
 
-								AllowScreenFallback =
-									true
-							}
-						)
+							HoldAfterClick =
+								0.12,
 
-					if success
-						and not needle.Parent then
-
-						notify(
-							"Auto Find Needle",
-							"Needle picked up.",
-							2
-						)
-					end
+							ClickCount =
+								NEEDLE_CLICK_COUNT
+						}
+					)
 
 					if needle.Parent
 						and autoFindNeedleEnabled
@@ -3550,6 +3835,7 @@ local function startAutoFindNeedle()
 					end
 				end
 			else
+
 				task.wait(0.1)
 			end
 		end
@@ -3575,10 +3861,8 @@ end
 --========================================================
 -- INF RANGE
 --
--- MANUAL ONLY
--- NO LOOP
--- NO AUTO SEARCH
--- ONE ATTEMPT PER MANUAL CLICK
+-- MANUAL ONLY.
+-- NO LOOP.
 --========================================================
 
 local function getTrackedPickupFromTarget(
@@ -3603,6 +3887,7 @@ local function getTrackedPickupFromTarget(
 		end
 
 		if current.Name == "HayPiece" then
+
 			hayCache[current] =
 				true
 
@@ -3614,6 +3899,7 @@ local function getTrackedPickupFromTarget(
 		end
 
 		if current.Name == "Diamond" then
+
 			diamondCache[current] =
 				true
 
@@ -3625,6 +3911,7 @@ local function getTrackedPickupFromTarget(
 		end
 
 		if current.Name == "Key" then
+
 			local key =
 				resolveNamedRoot(
 					current,
@@ -3696,6 +3983,7 @@ local function raycastScreenPosition(
 		Enum.RaycastFilterType.Exclude
 
 	if LocalPlayer.Character then
+
 		params.FilterDescendantsInstances = {
 			LocalPlayer.Character
 		}
@@ -3743,6 +4031,7 @@ track(
 		input,
 		processed
 	)
+
 		if processed
 			or not infRangeEnabled
 			or infRangeClickBusy then
@@ -3782,55 +4071,62 @@ track(
 
 		task.spawn(function()
 
-			local rightOffset =
-				0
+			-- Hay uses the new look-at system too.
+			if hayCache[pickup]
+				and not needleCache[pickup] then
 
-			if needleCache[
-				pickup
-			] then
+				teleportLookClickHay(
+					pickup,
+					"Inf Range",
 
-				rightOffset =
-					NEEDLE_RIGHT_OFFSET
+					function()
+						return infRangeEnabled
+					end,
 
-			elseif hayCache[
-				pickup
-			] then
+					true
+				)
 
-				rightOffset =
-					HAY_RIGHT_OFFSET
+			else
+
+				local rightOffset =
+					0
+
+				if needleCache[
+					pickup
+				] then
+
+					rightOffset =
+						NEEDLE_RIGHT_OFFSET
+				end
+
+				pickupObject(
+					pickup,
+					{
+						Owner =
+							"Inf Range",
+
+						ShouldContinue =
+							function()
+								return infRangeEnabled
+							end,
+
+						Distance =
+							2.2,
+
+						FrontDistance =
+							PICKUP_FRONT_DISTANCE,
+
+						RightOffset =
+							rightOffset,
+
+						HoldAfterClick =
+							0.08,
+
+						ClickCount =
+							1
+					}
+				)
 			end
-
-			pickupObject(
-				pickup,
-				{
-					Owner =
-						"Inf Range",
-
-					ShouldContinue =
-						function()
-							return infRangeEnabled
-						end,
-
-					Distance =
-						2.2,
-
-					FrontDistance =
-						PICKUP_FRONT_DISTANCE,
-
-					RightOffset =
-						rightOffset,
-
-					HoldAfterClick =
-						0.08,
-
-					-- ONE CLICK ONLY.
-					ClickCount =
-						1,
-
-					AllowScreenFallback =
-						true
-				}
-			)
 
 			task.wait(0.12)
 
@@ -3853,6 +4149,7 @@ local function startUfoEvent()
 		)
 
 	if not button then
+
 		notify(
 			"UFO Event",
 			"UFO button was not found.",
@@ -3895,34 +4192,38 @@ local function startUfoEvent()
 				local oldPivot =
 					character:GetPivot()
 
-				local unlockCamera =
-					lockCamera()
-
 				teleportCharacterNear(
 					part.Position,
 					UFO_DISTANCE
 				)
 
-				task.wait(0.08)
-
-				clickObject(
-					button,
-					6,
-					nil,
-					true
+				faceCharacterAt(
+					part.Position
 				)
 
+				task.wait(0.08)
+
+				local restoreCamera =
+					lookCameraAtPart(
+						part
+					)
+
+				clickTarget(
+					button,
+					6,
+					nil
+				)
+
+				restoreCamera()
+
 				if character.Parent then
-					pcall(function()
-						character:PivotTo(
-							oldPivot
-						)
-					end)
+
+					character:PivotTo(
+						oldPivot
+					)
 
 					stopVelocity()
 				end
-
-				unlockCamera()
 
 				return true
 			end
@@ -3944,9 +4245,11 @@ local function setSpeed(state)
 		state
 
 	if not state then
+
 		for humanoid, oldSpeed in pairs(
 			originalWalkSpeeds
 		) do
+
 			if humanoid
 				and humanoid.Parent then
 
@@ -3962,7 +4265,9 @@ local function setThirdPerson(state)
 		state
 
 	if not state then
+
 		pcall(function()
+
 			LocalPlayer.CameraMode =
 				originalCameraMode
 
@@ -3977,6 +4282,7 @@ end
 
 local function clearFly()
 	if flyConnection then
+
 		pcall(function()
 			flyConnection:Disconnect()
 		end)
@@ -3987,16 +4293,12 @@ local function clearFly()
 
 	if flyVelocity then
 		flyVelocity:Destroy()
-
-		flyVelocity =
-			nil
+		flyVelocity = nil
 	end
 
 	if flyGyro then
 		flyGyro:Destroy()
-
-		flyGyro =
-			nil
+		flyGyro = nil
 	end
 
 	if flyHumanoid
@@ -4006,11 +4308,8 @@ local function clearFly()
 			flyOldPlatformStand == true
 	end
 
-	flyHumanoid =
-		nil
-
-	flyOldPlatformStand =
-		nil
+	flyHumanoid = nil
+	flyOldPlatformStand = nil
 end
 
 local function attachFly()
@@ -4050,8 +4349,7 @@ local function attachFly()
 					1e9
 				),
 
-			P =
-				1250,
+			P = 1250,
 
 			Velocity =
 				Vector3.zero,
@@ -4069,11 +4367,8 @@ local function attachFly()
 					1e9
 				),
 
-			P =
-				5000,
-
-			D =
-				100,
+			P = 5000,
+			D = 100,
 
 			CFrame =
 				root.CFrame,
@@ -4089,9 +4384,10 @@ local function attachFly()
 				return
 			end
 
-			-- Fly stays enabled but pauses during pickup/sell.
 			if interactionBusy then
+
 				if flyVelocity then
+
 					flyVelocity.Velocity =
 						Vector3.zero
 				end
@@ -4113,6 +4409,7 @@ local function attachFly()
 			if UserInputService:IsKeyDown(
 				Enum.KeyCode.W
 			) then
+
 				movement +=
 					Camera.CFrame.LookVector
 			end
@@ -4120,6 +4417,7 @@ local function attachFly()
 			if UserInputService:IsKeyDown(
 				Enum.KeyCode.S
 			) then
+
 				movement -=
 					Camera.CFrame.LookVector
 			end
@@ -4127,6 +4425,7 @@ local function attachFly()
 			if UserInputService:IsKeyDown(
 				Enum.KeyCode.A
 			) then
+
 				movement -=
 					Camera.CFrame.RightVector
 			end
@@ -4134,23 +4433,24 @@ local function attachFly()
 			if UserInputService:IsKeyDown(
 				Enum.KeyCode.D
 			) then
+
 				movement +=
 					Camera.CFrame.RightVector
 			end
 
 			if movement.Magnitude < 0.05 then
+
 				movement =
 					humanoid.MoveDirection
 			end
 
-			local vertical =
-				0
+			local vertical = 0
 
 			if UserInputService:IsKeyDown(
 				Enum.KeyCode.Space
 			) then
-				vertical +=
-					1
+
+				vertical += 1
 			end
 
 			if UserInputService:IsKeyDown(
@@ -4160,11 +4460,11 @@ local function attachFly()
 					Enum.KeyCode.C
 				) then
 
-				vertical -=
-					1
+				vertical -= 1
 			end
 
 			if os.clock() < flyJumpUntil then
+
 				vertical =
 					math.max(
 						vertical,
@@ -4180,6 +4480,7 @@ local function attachFly()
 				)
 
 			if movement.Magnitude > 0.05 then
+
 				velocity +=
 					movement.Unit
 					* FLY_SPEED
@@ -4196,6 +4497,7 @@ local function attachFly()
 				)
 
 			if look.Magnitude > 0.05 then
+
 				flyGyro.CFrame =
 					CFrame.lookAt(
 						root.Position,
@@ -4235,7 +4537,9 @@ track(
 				getHumanoid()
 
 			if humanoid then
+
 				pcall(function()
+
 					humanoid:ChangeState(
 						Enum.HumanoidStateType.Jumping
 					)
@@ -4255,6 +4559,7 @@ track(
 				getHumanoid()
 
 			if humanoid then
+
 				if originalWalkSpeeds[
 					humanoid
 				] == nil then
@@ -4271,7 +4576,9 @@ track(
 		end
 
 		if thirdPersonEnabled then
+
 			pcall(function()
+
 				LocalPlayer.CameraMode =
 					Enum.CameraMode.Classic
 
@@ -4305,6 +4612,7 @@ local function stopPartNameHover()
 		false
 
 	if partNameHoverConnection then
+
 		partNameHoverConnection:Disconnect()
 
 		partNameHoverConnection =
@@ -4312,6 +4620,7 @@ local function stopPartNameHover()
 	end
 
 	if partNameHoverLabel then
+
 		partNameHoverLabel:Destroy()
 
 		partNameHoverLabel =
@@ -4347,20 +4656,16 @@ local function startPartNameHover()
 			Font =
 				Enum.Font.GothamSemibold,
 
-			Text =
-				"",
+			Text = "",
 
 			TextColor3 =
 				Colors.Text,
 
-			TextSize =
-				12,
+			TextSize = 12,
 
-			Visible =
-				false,
+			Visible = false,
 
-			ZIndex =
-				9999,
+			ZIndex = 9999,
 
 			Parent =
 				screenGui
@@ -4385,6 +4690,7 @@ local function startPartNameHover()
 				Mouse.Target
 
 			if not target then
+
 				partNameHoverLabel.Visible =
 					false
 
@@ -4426,81 +4732,52 @@ local function cleanupAll(
 	cleaning =
 		true
 
-	autoFarmEnabled =
-		false
+	autoFarmEnabled = false
+	autoHayEnabled = false
+	autoSellEnabled = false
 
-	autoHayEnabled =
-		false
+	autoDiamondEnabled = false
+	autoColorHayEnabled = false
 
-	autoSellEnabled =
-		false
+	autoFindKeyEnabled = false
+	autoFindNeedleEnabled = false
 
-	autoDiamondEnabled =
-		false
+	diamondRunId += 1
+	colorHayRunId += 1
+	keyRunId += 1
+	needleRunId += 1
 
-	autoColorHayEnabled =
-		false
+	noPickupCooldownEnabled = false
+	infRangeEnabled = false
+	infRangeClickBusy = false
 
-	autoFindKeyEnabled =
-		false
+	speedEnabled = false
+	infiniteJumpEnabled = false
 
-	autoFindNeedleEnabled =
-		false
-
-	diamondRunId +=
-		1
-
-	colorHayRunId +=
-		1
-
-	keyRunId +=
-		1
-
-	needleRunId +=
-		1
-
-	noPickupCooldownEnabled =
-		false
-
-	infRangeEnabled =
-		false
-
-	infRangeClickBusy =
-		false
-
-	speedEnabled =
-		false
-
-	infiniteJumpEnabled =
-		false
-
-	setThirdPerson(
-		false
-	)
-
-	setFly(
-		false
-	)
+	setThirdPerson(false)
+	setFly(false)
 
 	stopPartNameHover()
 	restoreInteractionSettings()
 
 	if antiAfkConnection then
+
 		pcall(function()
 			antiAfkConnection:Disconnect()
 		end)
 
-		antiAfkConnection =
-			nil
+		antiAfkConnection = nil
 	end
 
 	for humanoid, oldSpeed in pairs(
 		originalWalkSpeeds
 	) do
+
 		if humanoid
 			and humanoid.Parent then
 
 			pcall(function()
+
 				humanoid.WalkSpeed =
 					oldSpeed
 			end)
@@ -4510,6 +4787,7 @@ local function cleanupAll(
 	for _, connection in ipairs(
 		connections
 	) do
+
 		pcall(function()
 			connection:Disconnect()
 		end)
@@ -4520,6 +4798,7 @@ local function cleanupAll(
 	)
 
 	if screenGui then
+
 		screenGui:Destroy()
 
 		screenGui =
@@ -4527,6 +4806,7 @@ local function cleanupAll(
 	end
 
 	if hardUnload then
+
 		_G.THHGrowersHardUnloaded =
 			true
 	end
@@ -4546,11 +4826,11 @@ end
 local guiParent
 
 if type(gethui) == "function" then
+
 	local success, result =
 		pcall(gethui)
 
-	if success
-		and result then
+	if success and result then
 
 		guiParent =
 			result
@@ -4558,6 +4838,7 @@ if type(gethui) == "function" then
 end
 
 if not guiParent then
+
 	guiParent =
 		LocalPlayer:WaitForChild(
 			"PlayerGui"
@@ -4680,8 +4961,7 @@ notify =
 		)
 
 		create("TextLabel", {
-			BackgroundTransparency =
-				1,
+			BackgroundTransparency = 1,
 
 			Position =
 				UDim2.fromOffset(
@@ -4720,8 +5000,7 @@ notify =
 		})
 
 		create("TextLabel", {
-			BackgroundTransparency =
-				1,
+			BackgroundTransparency = 1,
 
 			Position =
 				UDim2.fromOffset(
@@ -4784,7 +5063,9 @@ local function getVampauthClient()
 		return VampauthClient
 	end
 
-	if type(loadstring) ~= "function" then
+	if type(loadstring)
+		~= "function" then
+
 		return nil,
 			"loadstring unavailable."
 	end
@@ -4798,7 +5079,8 @@ local function getVampauthClient()
 		end)
 
 	if not ok
-		or type(source) ~= "string" then
+		or type(source)
+			~= "string" then
 
 		return nil,
 			"Could not load Vampauth."
@@ -4811,7 +5093,8 @@ local function getVampauthClient()
 		)
 
 	if not compileOk
-		or type(chunk) ~= "function" then
+		or type(chunk)
+			~= "function" then
 
 		return nil,
 			"Could not start Vampauth."
@@ -4821,8 +5104,10 @@ local function getVampauthClient()
 		pcall(chunk)
 
 	if not moduleOk
-		or type(Vampauth) ~= "table"
-		or type(Vampauth.new) ~= "function" then
+		or type(Vampauth)
+			~= "table"
+		or type(Vampauth.new)
+			~= "function" then
 
 		return nil,
 			"Vampauth failed."
@@ -4844,6 +5129,7 @@ local function getVampauthClient()
 		end)
 
 	if not clientOk then
+
 		return nil,
 			"Could not initialize Vampauth."
 	end
@@ -4876,6 +5162,7 @@ local function validateKey(key)
 		end)
 
 	if not success then
+
 		return false,
 			"Validation failed."
 	end
@@ -4885,6 +5172,7 @@ local function validateKey(key)
 	end
 
 	if type(result) == "table" then
+
 		return false,
 			tostring(
 				result.error
@@ -4901,7 +5189,7 @@ local function validateKey(key)
 end
 
 --========================================================
--- DRAGGING
+-- DRAG
 --========================================================
 
 local function makeDraggable(
@@ -5022,10 +5310,7 @@ local function buildPcDrawing(parent)
 				parent
 		})
 
-	corner(
-		monitor,
-		9
-	)
+	corner(monitor, 9)
 
 	stroke(
 		monitor,
@@ -5065,14 +5350,9 @@ local function buildPcDrawing(parent)
 				monitor
 		})
 
-	corner(
-		display,
-		5
-	)
+	corner(display, 5)
 
-	addGlassGradient(
-		display
-	)
+	addGlassGradient(display)
 
 	create("Frame", {
 		BackgroundColor3 =
@@ -5133,10 +5413,7 @@ local function buildPcDrawing(parent)
 				monitor
 		})
 
-	corner(
-		stand,
-		4
-	)
+	corner(stand, 4)
 end
 
 local function buildPhoneDrawing(parent)
@@ -5167,10 +5444,7 @@ local function buildPhoneDrawing(parent)
 				parent
 		})
 
-	corner(
-		body,
-		16
-	)
+	corner(body, 16)
 
 	stroke(
 		body,
@@ -5210,14 +5484,8 @@ local function buildPhoneDrawing(parent)
 				body
 		})
 
-	corner(
-		display,
-		8
-	)
-
-	addGlassGradient(
-		display
-	)
+	corner(display, 8)
+	addGlassGradient(display)
 
 	local speaker =
 		create("Frame", {
@@ -5245,10 +5513,7 @@ local function buildPhoneDrawing(parent)
 				body
 		})
 
-	corner(
-		speaker,
-		3
-	)
+	corner(speaker, 3)
 
 	local home =
 		create("Frame", {
@@ -5276,10 +5541,7 @@ local function buildPhoneDrawing(parent)
 				body
 		})
 
-	corner(
-		home,
-		3
-	)
+	corner(home, 3)
 end
 
 --========================================================
@@ -5341,10 +5603,7 @@ local function buildMainMenu(mode)
 				screenGui
 		})
 
-	corner(
-		mainFrame,
-		16
-	)
+	corner(mainFrame, 16)
 
 	stroke(
 		mainFrame,
@@ -5358,13 +5617,11 @@ local function buildMainMenu(mode)
 	)
 
 	if phoneMode then
+
 		mainScale =
 			create("UIScale", {
-				Scale =
-					1,
-
-				Parent =
-					mainFrame
+				Scale = 1,
+				Parent = mainFrame
 			})
 
 		local function updateScale()
@@ -5401,6 +5658,7 @@ local function buildMainMenu(mode)
 		updateScale()
 
 		if Camera then
+
 			track(
 				Camera:GetPropertyChangedSignal(
 					"ViewportSize"
@@ -5461,10 +5719,7 @@ local function buildMainMenu(mode)
 				sidebar
 		})
 
-	corner(
-		gameIcon,
-		10
-	)
+	corner(gameIcon, 10)
 
 	create("TextLabel", {
 		BackgroundTransparency =
@@ -5570,10 +5825,7 @@ local function buildMainMenu(mode)
 				sidebar
 		})
 
-	corner(
-		profile,
-		11
-	)
+	corner(profile, 11)
 
 	local avatar =
 		create("ImageLabel", {
@@ -5602,10 +5854,7 @@ local function buildMainMenu(mode)
 				profile
 		})
 
-	corner(
-		avatar,
-		21
-	)
+	corner(avatar, 21)
 
 	create("TextLabel", {
 		BackgroundTransparency =
@@ -5895,10 +6144,7 @@ local function buildMainMenu(mode)
 				header
 		})
 
-	corner(
-		hide,
-		10
-	)
+	corner(hide, 10)
 
 	local pageHolder =
 		create("Frame", {
@@ -5927,6 +6173,7 @@ local function buildMainMenu(mode)
 	local navButtons = {}
 
 	local function createPage(name)
+
 		local page =
 			create("ScrollingFrame", {
 				BackgroundTransparency =
@@ -5985,9 +6232,11 @@ local function buildMainMenu(mode)
 	end
 
 	local function setPage(name)
+
 		for pageName, page in pairs(
 			pages
 		) do
+
 			page.Visible =
 				pageName == name
 		end
@@ -5995,6 +6244,7 @@ local function buildMainMenu(mode)
 		for navName, button in pairs(
 			navButtons
 		) do
+
 			local selected =
 				navName == name
 
@@ -6019,6 +6269,7 @@ local function buildMainMenu(mode)
 	end
 
 	local function createNav(name)
+
 		local button =
 			create("TextButton", {
 				BackgroundColor3 =
@@ -6067,13 +6318,11 @@ local function buildMainMenu(mode)
 			0
 		)
 
-		corner(
-			button,
-			9
-		)
+		corner(button, 9)
 
 		track(
 			button.Activated:Connect(function()
+
 				setPage(
 					name
 				)
@@ -6115,10 +6364,7 @@ local function buildMainMenu(mode)
 					parent
 			})
 
-		corner(
-			frame,
-			12
-		)
+		corner(frame, 12)
 
 		stroke(
 			frame,
@@ -6178,6 +6424,7 @@ local function buildMainMenu(mode)
 		})
 
 		if description then
+
 			create("TextLabel", {
 				BackgroundTransparency =
 					1,
@@ -6260,10 +6507,7 @@ local function buildMainMenu(mode)
 					parent
 			})
 
-		corner(
-			button,
-			10
-		)
+		corner(button, 10)
 
 		stroke(
 			button,
@@ -6312,6 +6556,7 @@ local function buildMainMenu(mode)
 		})
 
 		if showBeta then
+
 			local beta =
 				create("TextLabel", {
 					BackgroundColor3 =
@@ -6350,10 +6595,7 @@ local function buildMainMenu(mode)
 						button
 				})
 
-			corner(
-				beta,
-				6
-			)
+			corner(beta, 6)
 
 			stroke(
 				beta,
@@ -6436,10 +6678,7 @@ local function buildMainMenu(mode)
 					button
 			})
 
-		corner(
-			switch,
-			14
-		)
+		corner(switch, 14)
 
 		local knob =
 			create("Frame", {
@@ -6470,12 +6709,10 @@ local function buildMainMenu(mode)
 					switch
 			})
 
-		corner(
-			knob,
-			10
-		)
+		corner(knob, 10)
 
 		local function updateVisual()
+
 			switch.BackgroundColor3 =
 				enabled
 					and Colors.AccentDark
@@ -6555,10 +6792,7 @@ local function buildMainMenu(mode)
 					parent
 			})
 
-		corner(
-			button,
-			10
-		)
+		corner(button, 10)
 
 		create("TextLabel", {
 			BackgroundTransparency =
@@ -6675,7 +6909,7 @@ local function buildMainMenu(mode)
 	section(
 		home,
 		"welcome to THH Growers",
-		"Turn on the mods you want to use. Multiple mods can stay enabled together."
+		"Turn on the mods you want to use."
 	)
 
 	--====================================================
@@ -6692,7 +6926,7 @@ local function buildMainMenu(mode)
 	createToggle(
 		farming,
 		"Auto Farm",
-		"Automatically picks up 5 HayPieces, sells them, then repeats.",
+		"Teleports to 5 HayPieces, looks at and picks them up, then sells.",
 		function(state)
 
 			if state then
@@ -6706,7 +6940,7 @@ local function buildMainMenu(mode)
 	createToggle(
 		farming,
 		"Auto Pick Up Hay",
-		"Automatically moves Hay in front of you and picks it up.",
+		"Teleports to Hay, looks at it, clicks it, then goes to the next Hay.",
 		function(state)
 
 			if state then
@@ -6720,7 +6954,7 @@ local function buildMainMenu(mode)
 	createToggle(
 		farming,
 		"Auto Sell",
-		"Automatically goes close to SellPart, sells, then brings you back.",
+		"Teleports close to SellPart, looks at it, clicks it, then teleports back.",
 		function(state)
 
 			if state then
@@ -6787,7 +7021,7 @@ local function buildMainMenu(mode)
 	createToggle(
 		special,
 		"Auto Pick Up Color Hay",
-		"Automatically moves color-changing Hay in front of you and picks it up.",
+		"Automatically picks up color-changing HayPieces.",
 		function(state)
 
 			if state then
@@ -6881,6 +7115,7 @@ local function buildMainMenu(mode)
 		function(state)
 
 			if state then
+
 				startAutoFindKey()
 
 				notify(
@@ -6889,6 +7124,7 @@ local function buildMainMenu(mode)
 					2
 				)
 			else
+
 				stopAutoFindKey()
 			end
 		end,
@@ -6902,6 +7138,7 @@ local function buildMainMenu(mode)
 		function(state)
 
 			if state then
+
 				startAutoFindNeedle()
 
 				notify(
@@ -6910,6 +7147,7 @@ local function buildMainMenu(mode)
 					2
 				)
 			else
+
 				stopAutoFindNeedle()
 			end
 		end,
@@ -6994,6 +7232,7 @@ local function buildMainMenu(mode)
 				state
 
 			if antiAfkConnection then
+
 				antiAfkConnection:Disconnect()
 
 				antiAfkConnection =
@@ -7001,6 +7240,7 @@ local function buildMainMenu(mode)
 			end
 
 			if state then
+
 				antiAfkConnection =
 					LocalPlayer.Idled:Connect(function()
 
@@ -7017,6 +7257,7 @@ local function buildMainMenu(mode)
 						end
 
 						pcall(function()
+
 							VirtualUser:CaptureController()
 
 							VirtualUser:Button2Down(
@@ -7054,12 +7295,14 @@ local function buildMainMenu(mode)
 		function()
 
 			if game.JobId ~= "" then
+
 				TeleportService:TeleportToPlaceInstance(
 					game.PlaceId,
 					game.JobId,
 					LocalPlayer
 				)
 			else
+
 				TeleportService:Teleport(
 					game.PlaceId,
 					LocalPlayer
@@ -7078,6 +7321,7 @@ local function buildMainMenu(mode)
 				getHumanoid()
 
 			if humanoid then
+
 				humanoid.Health =
 					0
 			end
@@ -7128,22 +7372,23 @@ local function buildMainMenu(mode)
 
 	section(
 		updates,
-		"Pickup Update",
-		"• Auto Farm Hay stays in front while it is being clicked\n"
-		.. "• Hay is moved slightly to the right\n"
-		.. "• Color Hay uses the same stable pickup system\n"
-		.. "• Needle is moved farther to the right\n"
-		.. "• player still TPs close to the real item first\n"
-		.. "• Auto Farm picks one Hay at a time\n"
-		.. "• Auto Farm sells after 5 grabs\n"
-		.. "• Auto Sell now uses the simpler working method\n"
-		.. "• Auto Sell TPs close to the real SellPart\n"
-		.. "• Auto Sell clicks the real SellPart interaction\n"
-		.. "• Auto Sell returns you afterward\n"
-		.. "• Auto Sell does not lock the camera\n"
-		.. "• Inf Range is manual only\n"
-		.. "• Inf Range never loops\n"
-		.. "• multiple mods share one interaction system"
+		"Farm + Sell Update",
+		"• Auto Pick Up Hay no longer moves the HayPiece\n"
+		.. "• it teleports close to the real HayPiece\n"
+		.. "• your character faces the Hay\n"
+		.. "• the camera looks directly at the Hay\n"
+		.. "• THH clicks it and moves to the next Hay\n"
+		.. "• Auto Farm does this 5 times\n"
+		.. "• after 5 Hay, Auto Farm teleports to SellPart\n"
+		.. "• Auto Farm faces and looks at SellPart\n"
+		.. "• Auto Farm clicks SellPart and goes back to farming\n"
+		.. "• standalone Auto Sell saves your old position\n"
+		.. "• standalone Auto Sell teleports close to SellPart\n"
+		.. "• standalone Auto Sell looks at and clicks SellPart\n"
+		.. "• standalone Auto Sell teleports you back afterward\n"
+		.. "• no SellPart movement is used\n"
+		.. "• no player anchoring is used\n"
+		.. "• Inf Range is still manual only and never loops"
 	)
 
 	--====================================================
@@ -7341,10 +7586,7 @@ local function showDeviceChooser()
 				overlay
 		})
 
-	corner(
-		panel,
-		18
-	)
+	corner(panel, 18)
 
 	stroke(
 		panel,
@@ -7353,9 +7595,7 @@ local function showDeviceChooser()
 		1.2
 	)
 
-	addGlassGradient(
-		panel
-	)
+	addGlassGradient(panel)
 
 	create("TextLabel", {
 		BackgroundTransparency =
@@ -7452,10 +7692,7 @@ local function showDeviceChooser()
 				panel
 		})
 
-	corner(
-		pc,
-		15
-	)
+	corner(pc, 15)
 
 	stroke(
 		pc,
@@ -7464,9 +7701,7 @@ local function showDeviceChooser()
 		1
 	)
 
-	buildPcDrawing(
-		pc
-	)
+	buildPcDrawing(pc)
 
 	create("TextLabel", {
 		BackgroundTransparency =
@@ -7567,10 +7802,7 @@ local function showDeviceChooser()
 				panel
 		})
 
-	corner(
-		phone,
-		15
-	)
+	corner(phone, 15)
 
 	stroke(
 		phone,
@@ -7579,9 +7811,7 @@ local function showDeviceChooser()
 		1
 	)
 
-	buildPhoneDrawing(
-		phone
-	)
+	buildPhoneDrawing(phone)
 
 	create("TextLabel", {
 		BackgroundTransparency =
@@ -7659,6 +7889,7 @@ local function showDeviceChooser()
 		false
 
 	local function choose(mode)
+
 		if selected then
 			return
 		end
@@ -7693,7 +7924,7 @@ local function showDeviceChooser()
 end
 
 --========================================================
--- KEY SYSTEM GUI
+-- KEY SYSTEM
 --========================================================
 
 local function showKeySystem()
@@ -7752,10 +7983,7 @@ local function showKeySystem()
 				overlay
 		})
 
-	corner(
-		panel,
-		18
-	)
+	corner(panel, 18)
 
 	stroke(
 		panel,
@@ -7764,9 +7992,7 @@ local function showKeySystem()
 		1.2
 	)
 
-	addGlassGradient(
-		panel
-	)
+	addGlassGradient(panel)
 
 	local header =
 		create("Frame", {
@@ -7794,10 +8020,7 @@ local function showKeySystem()
 				panel
 		})
 
-	corner(
-		header,
-		14
-	)
+	corner(header, 14)
 
 	makeDraggable(
 		panel,
@@ -7831,10 +8054,7 @@ local function showKeySystem()
 				header
 		})
 
-	corner(
-		icon,
-		14
-	)
+	corner(icon, 14)
 
 	create("TextLabel", {
 		BackgroundTransparency =
@@ -7968,10 +8188,7 @@ local function showKeySystem()
 		0
 	)
 
-	corner(
-		keyBox,
-		11
-	)
+	corner(keyBox, 11)
 
 	local continue =
 		create("TextButton", {
@@ -8016,10 +8233,7 @@ local function showKeySystem()
 				panel
 		})
 
-	corner(
-		continue,
-		11
-	)
+	corner(continue, 11)
 
 	local getKey =
 		create("TextButton", {
@@ -8059,10 +8273,7 @@ local function showKeySystem()
 				panel
 		})
 
-	corner(
-		getKey,
-		11
-	)
+	corner(getKey, 11)
 
 	local status =
 		create("TextLabel", {
@@ -8129,6 +8340,7 @@ local function showKeySystem()
 		false
 
 	local function checkKey()
+
 		if checking then
 			return
 		end
@@ -8139,6 +8351,7 @@ local function showKeySystem()
 			)
 
 		if key == "" then
+
 			status.Text =
 				"Enter your access key."
 
@@ -8162,6 +8375,7 @@ local function showKeySystem()
 				)
 
 			if valid then
+
 				continue.Text =
 					"Accepted"
 
@@ -8177,6 +8391,7 @@ local function showKeySystem()
 
 				showDeviceChooser()
 			else
+
 				checking =
 					false
 
@@ -8204,6 +8419,7 @@ local function showKeySystem()
 		)
 
 			if enterPressed then
+
 				checkKey()
 			end
 		end)
