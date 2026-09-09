@@ -6,7 +6,9 @@ if type(_G.THHGrowersCleanup) == "function" then
 	pcall(_G.THHGrowersCleanup)
 end
 
---// SERVICES
+--==================================================
+-- SERVICES
+--==================================================
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -26,7 +28,9 @@ local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 local Camera = Workspace.CurrentCamera
 
---// VAMPAUTH - KEEPING YOUR EXISTING SYSTEM
+--==================================================
+-- AUTH
+--==================================================
 
 local PROJECT_ID = "PD6XH2EGXZXUHGED"
 local AUTH_SECRET = "04cce9295d9d2476cb2516b3363693a3c401767b4e75bd01"
@@ -37,13 +41,17 @@ local GET_KEY_URL =
 local VAMPAUTH_CLIENT_URL =
 	"https://vampauth.com/client/vampauth.lua"
 
---// SEARCH FOR THE NEEDLE IDS
+--==================================================
+-- PLACE IDS
+--==================================================
 
 local SEARCH_FOR_NEEDLE_PLACE_ID = 77108422251420
 local FARMHOUSE_PLACE_ID = 108628039999641
 local BASEMENT_PLACE_ID = 83445806734780
 
---// ICONS
+--==================================================
+-- ICONS
+--==================================================
 
 local GAME_ID = game.GameId
 
@@ -61,31 +69,37 @@ local PLAYER_ICON =
 	.. tostring(LocalPlayer.UserId)
 	.. "&w=150&h=150"
 
---// COLORS
+--==================================================
+-- LIGHT GRAY GLASS DESIGN
+--==================================================
 
 local Colors = {
-	Background = Color3.fromRGB(10, 11, 14),
-	Sidebar = Color3.fromRGB(14, 16, 20),
-	Card = Color3.fromRGB(19, 22, 27),
-	CardHover = Color3.fromRGB(24, 27, 33),
-	Accent = Color3.fromRGB(86, 220, 132),
-	AccentDark = Color3.fromRGB(27, 61, 41),
-	Text = Color3.fromRGB(241, 243, 246),
-	SubText = Color3.fromRGB(135, 140, 152),
-	Stroke = Color3.fromRGB(38, 42, 50),
-	Danger = Color3.fromRGB(224, 74, 74)
+	Main = Color3.fromRGB(66, 69, 76),
+	Sidebar = Color3.fromRGB(54, 57, 64),
+
+	Card = Color3.fromRGB(91, 94, 102),
+	CardHover = Color3.fromRGB(105, 108, 116),
+	CardDark = Color3.fromRGB(48, 51, 58),
+
+	Input = Color3.fromRGB(50, 53, 60),
+
+	Stroke = Color3.fromRGB(187, 190, 198),
+
+	Text = Color3.fromRGB(249, 250, 252),
+	SubText = Color3.fromRGB(207, 210, 217),
+	Muted = Color3.fromRGB(168, 172, 181),
+
+	Accent = Color3.fromRGB(97, 230, 147),
+	AccentDark = Color3.fromRGB(49, 98, 67),
+
+	Danger = Color3.fromRGB(234, 91, 91),
+
+	White = Color3.fromRGB(255, 255, 255)
 }
 
-local Glass = {
-	Panel = Color3.fromRGB(75, 78, 85),
-	Card = Color3.fromRGB(100, 103, 111),
-	Dark = Color3.fromRGB(45, 48, 54),
-	Stroke = Color3.fromRGB(188, 191, 198),
-	Text = Color3.fromRGB(246, 247, 249),
-	SubText = Color3.fromRGB(205, 208, 214)
-}
-
---// CONFIG
+--==================================================
+-- CONFIG
+--==================================================
 
 local SPEED_AMOUNT = 50
 local FLY_SPEED = 58
@@ -95,7 +109,9 @@ local SELL_DISTANCE = 3
 local UFO_DISTANCE = 3
 
 local NORMAL_CLICK_BURST = 6
-local STRONG_CLICK_BURST = 8
+local STRONG_CLICK_BURST = 10
+local NEEDLE_CLICK_BURST = 12
+local KEY_CLICK_BURST = 12
 local SELL_CLICK_BURST = 6
 
 local CLICK_GAP = 0.025
@@ -103,7 +119,12 @@ local CLICK_GAP = 0.025
 local FARM_PICKUPS_PER_SELL = 4
 local AUTO_SELL_INTERVAL = 2
 
---// STATE
+local NEEDLE_RETRY_DELAY = 0.4
+local KEY_RETRY_DELAY = 0.4
+
+--==================================================
+-- STATE
+--==================================================
 
 local connections = {}
 
@@ -112,7 +133,6 @@ local mainFrame
 local mainScale
 local floatingButton
 local notificationHolder
-
 local VampauthClient
 
 local cleaning = false
@@ -174,7 +194,9 @@ local recentAttempts =
 		__mode = "k"
 	})
 
---// OBJECT CACHES
+--==================================================
+-- CACHES
+--==================================================
 
 local hayCache = {}
 local diamondCache = {}
@@ -193,34 +215,46 @@ local colorHayConnections =
 		__mode = "k"
 	})
 
-local colorHayQueue = {}
-local colorHayQueued =
-	setmetatable({}, {
-		__mode = "k"
-	})
-
 local diamondQueue = {}
+local colorHayQueue = {}
+local needleQueue = {}
+local keyQueue = {}
+
 local diamondQueued =
 	setmetatable({}, {
 		__mode = "k"
 	})
 
-local needleQueue = {}
+local colorHayQueued =
+	setmetatable({}, {
+		__mode = "k"
+	})
+
 local needleQueued =
 	setmetatable({}, {
 		__mode = "k"
 	})
 
-local keyQueue = {}
 local keyQueued =
 	setmetatable({}, {
 		__mode = "k"
 	})
 
-local notify = function()
-end
+local needleLastAttempt =
+	setmetatable({}, {
+		__mode = "k"
+	})
 
---// BASIC HELPERS
+local keyLastAttempt =
+	setmetatable({}, {
+		__mode = "k"
+	})
+
+local notify = function() end
+
+--==================================================
+-- UI HELPERS
+--==================================================
 
 local function track(connection)
 	table.insert(connections, connection)
@@ -239,7 +273,7 @@ end
 
 local function corner(object, radius)
 	return create("UICorner", {
-		CornerRadius = UDim.new(0, radius or 8),
+		CornerRadius = UDim.new(0, radius or 10),
 		Parent = object
 	})
 end
@@ -247,7 +281,7 @@ end
 local function stroke(object, color, transparency, thickness)
 	return create("UIStroke", {
 		Color = color or Colors.Stroke,
-		Transparency = transparency or 0,
+		Transparency = transparency or 0.45,
 		Thickness = thickness or 1,
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		Parent = object
@@ -264,12 +298,32 @@ local function padding(object, left, right, top, bottom)
 	})
 end
 
+local function addGlassGradient(object)
+	create("UIGradient", {
+		Rotation = 90,
+
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(
+				0,
+				Color3.fromRGB(112, 115, 123)
+			),
+
+			ColorSequenceKeypoint.new(
+				1,
+				Color3.fromRGB(67, 70, 77)
+			)
+		}),
+
+		Parent = object
+	})
+end
+
 local function tween(object, duration, properties)
 	local animation =
 		TweenService:Create(
 			object,
 			TweenInfo.new(
-				duration or 0.16,
+				duration or 0.15,
 				Enum.EasingStyle.Quad,
 				Enum.EasingDirection.Out
 			),
@@ -282,16 +336,22 @@ local function tween(object, duration, properties)
 end
 
 local function copyText(text)
+	text = tostring(text)
+
 	if type(setclipboard) == "function" then
-		return pcall(setclipboard, tostring(text))
+		return pcall(setclipboard, text)
 	end
 
 	if type(toclipboard) == "function" then
-		return pcall(toclipboard, tostring(text))
+		return pcall(toclipboard, text)
 	end
 
 	return false
 end
+
+--==================================================
+-- CHARACTER HELPERS
+--==================================================
 
 local function getCharacter()
 	return LocalPlayer.Character
@@ -338,21 +398,6 @@ local function getMainPart(object)
 	end
 
 	return object:FindFirstChildWhichIsA("BasePart", true)
-end
-
-local function getClickDetector(object)
-	if not object then
-		return nil
-	end
-
-	if object:IsA("ClickDetector") then
-		return object
-	end
-
-	return object:FindFirstChildWhichIsA(
-		"ClickDetector",
-		true
-	)
 end
 
 local function getObjectPivot(object)
@@ -408,10 +453,42 @@ local function setObjectPivot(object, cframe)
 	return false
 end
 
+local function getClickDetector(object)
+	if not object then
+		return nil
+	end
+
+	if object:IsA("ClickDetector") then
+		return object
+	end
+
+	return object:FindFirstChildWhichIsA(
+		"ClickDetector",
+		true
+	)
+end
+
+local function getPrompt(object)
+	if not object then
+		return nil
+	end
+
+	if object:IsA("ProximityPrompt") then
+		return object
+	end
+
+	return object:FindFirstChildWhichIsA(
+		"ProximityPrompt",
+		true
+	)
+end
+
 local function getPartFromObject(object)
 	local current = object
 
-	while current and current ~= Workspace do
+	while current
+		and current ~= Workspace do
+
 		if current:IsA("BasePart") then
 			return current
 		end
@@ -443,7 +520,10 @@ local function getDistanceTo(object)
 		return math.huge
 	end
 
-	return (root.Position - part.Position).Magnitude
+	return (
+		root.Position
+		- part.Position
+	).Magnitude
 end
 
 local function withInteractionLock(callback)
@@ -465,20 +545,21 @@ local function withInteractionLock(callback)
 	return false
 end
 
---// CAMERA LOCK
---// USED FOR PICKUPS + INF RANGE
---// NOT USED FOR AUTO SELL
+--==================================================
+-- CAMERA LOCK
+--==================================================
 
 local function lockCamera()
-	Camera = Workspace.CurrentCamera or Camera
+	Camera =
+		Workspace.CurrentCamera
+		or Camera
 
 	if not Camera then
-		return function()
-		end
+		return function() end
 	end
 
-	local oldCameraType = Camera.CameraType
-	local oldCameraSubject = Camera.CameraSubject
+	local oldType = Camera.CameraType
+	local oldSubject = Camera.CameraSubject
 	local oldCFrame = Camera.CFrame
 	local oldFocus = Camera.Focus
 
@@ -488,9 +569,9 @@ local function lockCamera()
 	Camera.CFrame = oldCFrame
 	Camera.Focus = oldFocus
 
-	local connection
+	local cameraConnection
 
-	connection =
+	cameraConnection =
 		RunService.RenderStepped:Connect(function()
 			if not Camera then
 				return
@@ -509,13 +590,15 @@ local function lockCamera()
 
 		finished = true
 
-		if connection then
+		if cameraConnection then
 			pcall(function()
-				connection:Disconnect()
+				cameraConnection:Disconnect()
 			end)
 		end
 
-		Camera = Workspace.CurrentCamera or Camera
+		Camera =
+			Workspace.CurrentCamera
+			or Camera
 
 		if not Camera then
 			return
@@ -524,13 +607,15 @@ local function lockCamera()
 		pcall(function()
 			Camera.CFrame = oldCFrame
 			Camera.Focus = oldFocus
-			Camera.CameraSubject = oldCameraSubject
-			Camera.CameraType = oldCameraType
+			Camera.CameraSubject = oldSubject
+			Camera.CameraType = oldType
 		end)
 	end
 end
 
---// CLICK DETECTOR / PROMPT SETTINGS
+--==================================================
+-- RANGE / COOLDOWN
+--==================================================
 
 local function rememberClickDetector(detector)
 	if originalClickSettings[detector] then
@@ -557,8 +642,7 @@ local function rememberPrompt(prompt)
 		RequiresLineOfSight =
 			prompt.RequiresLineOfSight,
 
-		Enabled =
-			prompt.Enabled
+		Enabled = prompt.Enabled
 	}
 end
 
@@ -641,13 +725,17 @@ local function applySettingsToObject(object)
 end
 
 local function refreshCachedSettings()
-	for detector in pairs(originalClickSettings) do
+	for detector in pairs(
+		originalClickSettings
+	) do
 		if detector and detector.Parent then
 			applyClickDetector(detector)
 		end
 	end
 
-	for prompt in pairs(originalPromptSettings) do
+	for prompt in pairs(
+		originalPromptSettings
+	) do
 		if prompt and prompt.Parent then
 			applyPrompt(prompt)
 		end
@@ -711,89 +799,220 @@ local function restoreInteractionSettings()
 	end
 end
 
---// OBJECT IDENTIFICATION
+--==================================================
+-- NAME DETECTION
+--==================================================
 
-local function looksLikeNeedle(object)
-	if not object then
-		return false
-	end
+local function normalizeName(name)
+	name =
+		string.lower(
+			tostring(name or "")
+		)
 
-	if not object:IsA("BasePart")
-		and not object:IsA("Model")
-		and not object:IsA("Tool") then
-
-		return false
-	end
-
-	local name =
-		string.lower(object.Name)
-
-	return name == "needle"
-		or name == "needlepart"
-		or name == "hiddenneedle"
-		or string.find(
+	name =
+		string.gsub(
 			name,
-			"needle",
-			1,
-			true
-		) ~= nil
+			"[%s_%-%.]",
+			""
+		)
+
+	return name
 end
 
-local function looksLikeKey(object)
-	if not object then
+local function isNeedleName(name)
+	local lower =
+		normalizeName(name)
+
+	if lower == "" then
 		return false
 	end
 
-	if not object:IsA("BasePart")
-		and not object:IsA("Model")
-		and not object:IsA("Tool") then
+	local exact = {
+		needle = true,
+		needlepart = true,
+		needlemodel = true,
+		needlepickup = true,
+		needlehandle = true,
 
-		return false
-	end
+		hayneedle = true,
+		hayneedlepart = true,
+		hayneedlemodel = true,
 
-	local name =
-		string.lower(object.Name)
+		haystackneedle = true,
+		haystackneedlepart = true,
 
-	if name == "key"
-		or name == "keypart"
-		or name == "basementkey"
-		or name == "haykey"
-		or name == "chapter2key"
-		or name == "exitkey" then
+		hiddenneedle = true,
+		hiddenneedlepart = true,
 
+		goldneedle = true,
+		goldenneedle = true,
+
+		secretneedle = true,
+		smallneedle = true,
+
+		farmneedle = true,
+		basementneedle = true
+	}
+
+	if exact[lower] then
 		return true
 	end
 
-	if string.find(
-		name,
-		"key",
+	return string.find(
+		lower,
+		"needle",
 		1,
 		true
-	) then
+	) ~= nil
+end
 
-		if string.find(name, "keypad", 1, true)
-			or string.find(name, "keyboard", 1, true)
-			or string.find(name, "keyhole", 1, true)
-			or string.find(name, "monkey", 1, true)
-			or string.find(name, "donkey", 1, true) then
+local function isBadKeyName(name)
+	local lower =
+		normalizeName(name)
 
-			return false
+	local bad = {
+		"keyboard",
+		"keypad",
+		"keyhole",
+		"keybind",
+		"keycode",
+		"keyframe",
+		"monkey",
+		"donkey",
+		"turkey",
+		"hockey"
+	}
+
+	for _, word in ipairs(bad) do
+		if string.find(
+			lower,
+			word,
+			1,
+			true
+		) then
+			return true
 		end
-
-		return true
 	end
 
 	return false
 end
 
-local function getTrackedPickupRoot(object)
+local function isKeyName(name)
+	if isBadKeyName(name) then
+		return false
+	end
+
+	local lower =
+		normalizeName(name)
+
+	local exact = {
+		key = true,
+		keypart = true,
+		keyhandle = true,
+		keymodel = true,
+		keypickup = true,
+
+		basementkey = true,
+		basementkeypart = true,
+
+		haykey = true,
+		haystackkey = true,
+
+		hiddenkey = true,
+		exitkey = true,
+
+		chapter2key = true,
+		rustykey = true,
+		oldkey = true
+	}
+
+	if exact[lower] then
+		return true
+	end
+
+	return string.find(
+		lower,
+		"key",
+		1,
+		true
+	) ~= nil
+end
+
+local function hasNeedleAttribute(object)
+	if not object then
+		return false
+	end
+
+	local success, attributes =
+		pcall(function()
+			return object:GetAttributes()
+		end)
+
+	if not success then
+		return false
+	end
+
+	for name, value in pairs(attributes) do
+		if isNeedleName(name) then
+			return true
+		end
+
+		if type(value) == "string"
+			and isNeedleName(value) then
+
+			return true
+		end
+	end
+
+	return false
+end
+
+local function hasKeyAttribute(object)
+	if not object then
+		return false
+	end
+
+	local success, attributes =
+		pcall(function()
+			return object:GetAttributes()
+		end)
+
+	if not success then
+		return false
+	end
+
+	for name, value in pairs(attributes) do
+		if isKeyName(name) then
+			return true
+		end
+
+		if type(value) == "string"
+			and isKeyName(value) then
+
+			return true
+		end
+	end
+
+	return false
+end
+
+local function findNeedleAncestor(object)
 	local current = object
 
-	while current and current ~= Workspace do
-		if hayCache[current]
-			or diamondCache[current]
-			or needleCache[current]
-			or keyCache[current] then
+	if current
+		and (
+			current:IsA("ClickDetector")
+			or current:IsA("ProximityPrompt")
+		) then
+
+		current = current.Parent
+	end
+
+	while current
+		and current ~= Workspace do
+
+		if isNeedleName(current.Name)
+			or hasNeedleAttribute(current) then
 
 			return current
 		end
@@ -804,7 +1023,122 @@ local function getTrackedPickupRoot(object)
 	return nil
 end
 
---// QUEUES
+local function findKeyAncestor(object)
+	local current = object
+
+	if current
+		and (
+			current:IsA("ClickDetector")
+			or current:IsA("ProximityPrompt")
+		) then
+
+		current = current.Parent
+	end
+
+	while current
+		and current ~= Workspace do
+
+		if isKeyName(current.Name)
+			or hasKeyAttribute(current) then
+
+			return current
+		end
+
+		current = current.Parent
+	end
+
+	return nil
+end
+
+local function resolveNeedleRoot(object)
+	if not object then
+		return nil
+	end
+
+	local matched =
+		findNeedleAncestor(object)
+		or object
+
+	local tool =
+		matched:FindFirstAncestorOfClass(
+			"Tool"
+		)
+
+	if tool
+		and (
+			isNeedleName(tool.Name)
+			or isNeedleName(matched.Name)
+		) then
+
+		return tool
+	end
+
+	local current = matched
+
+	while current
+		and current ~= Workspace do
+
+		if current:IsA("Model")
+			and (
+				isNeedleName(current.Name)
+				or hasNeedleAttribute(current)
+			) then
+
+			return current
+		end
+
+		current = current.Parent
+	end
+
+	return matched
+end
+
+local function resolveKeyRoot(object)
+	if not object then
+		return nil
+	end
+
+	local matched =
+		findKeyAncestor(object)
+		or object
+
+	local tool =
+		matched:FindFirstAncestorOfClass(
+			"Tool"
+		)
+
+	if tool
+		and (
+			isKeyName(tool.Name)
+			or isKeyName(matched.Name)
+		) then
+
+		return tool
+	end
+
+	local current = matched
+
+	while current
+		and current ~= Workspace do
+
+		if current:IsA("Model")
+			and (
+				isKeyName(current.Name)
+				or hasKeyAttribute(current)
+			) then
+
+			return current
+		end
+
+		current = current.Parent
+	end
+
+	return matched
+end
+
+--==================================================
+-- QUEUES
+--==================================================
 
 local function queueObject(
 	queue,
@@ -820,7 +1154,10 @@ local function queueObject(
 
 	queued[object] = true
 
-	table.insert(queue, object)
+	table.insert(
+		queue,
+		object
+	)
 end
 
 local function queueDiamond(object)
@@ -855,7 +1192,9 @@ local function queueKey(object)
 	)
 end
 
---// COLOR HAY EVENT TRACKER
+--==================================================
+-- COLOR HAY
+--==================================================
 
 local function setupColorHayTracker(hay)
 	if colorHayConnections[hay] then
@@ -888,7 +1227,6 @@ local function setupColorHayTracker(hay)
 				end
 
 				colorHayConnections[hay] = nil
-
 				return
 			end
 
@@ -896,30 +1234,21 @@ local function setupColorHayTracker(hay)
 				colorHayState[hay]
 
 			if not state then
-				state = {
-					LastColor = part.Color,
-					LastChanged = 0
-				}
-
-				colorHayState[hay] = state
+				return
 			end
 
-			local previous =
-				state.LastColor
-
-			local current =
-				part.Color
+			local old = state.LastColor
+			local new = part.Color
 
 			local difference =
-				math.abs(previous.R - current.R)
-				+ math.abs(previous.G - current.G)
-				+ math.abs(previous.B - current.B)
+				math.abs(old.R - new.R)
+				+ math.abs(old.G - new.G)
+				+ math.abs(old.B - new.B)
 
-			state.LastColor = current
+			state.LastColor = new
 
 			if difference > 0.015 then
-				state.LastChanged =
-					os.clock()
+				state.LastChanged = os.clock()
 
 				if autoColorHayEnabled then
 					queueColorHay(hay)
@@ -933,7 +1262,81 @@ local function setupColorHayTracker(hay)
 	track(connection)
 end
 
---// CACHE REGISTRATION
+--==================================================
+-- REGISTER OBJECTS
+--==================================================
+
+local function registerNeedleCandidate(object)
+	local matched =
+		findNeedleAncestor(object)
+
+	if not matched
+		and (
+			isNeedleName(object.Name)
+			or hasNeedleAttribute(object)
+		) then
+
+		matched = object
+	end
+
+	if not matched then
+		return
+	end
+
+	local needle =
+		resolveNeedleRoot(matched)
+
+	if not needle
+		or not needle.Parent
+		or needleCache[needle] then
+
+		return
+	end
+
+	needleCache[needle] = true
+
+	applySettingsToObject(needle)
+
+	if autoFindNeedleEnabled then
+		queueNeedle(needle)
+	end
+end
+
+local function registerKeyCandidate(object)
+	local matched =
+		findKeyAncestor(object)
+
+	if not matched
+		and (
+			isKeyName(object.Name)
+			or hasKeyAttribute(object)
+		) then
+
+		matched = object
+	end
+
+	if not matched then
+		return
+	end
+
+	local key =
+		resolveKeyRoot(matched)
+
+	if not key
+		or not key.Parent
+		or keyCache[key] then
+
+		return
+	end
+
+	keyCache[key] = true
+
+	applySettingsToObject(key)
+
+	if autoFindKeyEnabled then
+		queueKey(key)
+	end
+end
 
 local function registerObject(object)
 	if object.Name == "HayPiece" then
@@ -965,40 +1368,8 @@ local function registerObject(object)
 		ufoCache[object] = true
 	end
 
-	if looksLikeNeedle(object) then
-		if not needleCache[object] then
-			needleCache[object] = true
-
-			applySettingsToObject(object)
-
-			if autoFindNeedleEnabled then
-				queueNeedle(object)
-			end
-		end
-	end
-
-	if looksLikeKey(object) then
-		if not keyCache[object] then
-			keyCache[object] = true
-
-			applySettingsToObject(object)
-
-			if autoFindKeyEnabled then
-				queueKey(object)
-			end
-		end
-	end
-
-	if object:IsA("ClickDetector")
-		or object:IsA("ProximityPrompt") then
-
-		local root =
-			getTrackedPickupRoot(object)
-
-		if root then
-			applyInteractionObject(object)
-		end
-	end
+	registerNeedleCandidate(object)
+	registerKeyCandidate(object)
 end
 
 local function unregisterObject(object)
@@ -1009,15 +1380,13 @@ local function unregisterObject(object)
 	needleCache[object] = nil
 	keyCache[object] = nil
 
-	colorHayState[object] = nil
-
 	diamondQueued[object] = nil
 	colorHayQueued[object] = nil
 	needleQueued[object] = nil
 	keyQueued[object] = nil
-end
 
--- ONE INITIAL SCAN ONLY
+	colorHayState[object] = nil
+end
 
 for _, object in ipairs(
 	Workspace:GetDescendants()
@@ -1025,11 +1394,31 @@ for _, object in ipairs(
 	registerObject(object)
 end
 
--- AFTER THAT EVERYTHING IS EVENT BASED
-
 track(
 	Workspace.DescendantAdded:Connect(function(object)
+
 		registerObject(object)
+
+		task.defer(function()
+			if not object
+				or not object.Parent then
+
+				return
+			end
+
+			registerNeedleCandidate(object)
+			registerKeyCandidate(object)
+
+			if object.Parent then
+				registerNeedleCandidate(
+					object.Parent
+				)
+
+				registerKeyCandidate(
+					object.Parent
+				)
+			end
+		end)
 	end)
 )
 
@@ -1039,7 +1428,9 @@ track(
 	end)
 )
 
---// MOVEMENT
+--==================================================
+-- MOVEMENT
+--==================================================
 
 local function moveCharacterNearPosition(
 	position,
@@ -1056,13 +1447,18 @@ local function moveCharacterNearPosition(
 	end
 
 	distance =
-		distance or PICKUP_DISTANCE
+		distance
+		or PICKUP_DISTANCE
 
 	local direction =
 		Vector3.new(
-			root.Position.X - position.X,
+			root.Position.X
+				- position.X,
+
 			0,
-			root.Position.Z - position.Z
+
+			root.Position.Z
+				- position.Z
 		)
 
 	if direction.Magnitude < 0.1 then
@@ -1072,29 +1468,27 @@ local function moveCharacterNearPosition(
 
 	direction = direction.Unit
 
-	local positionToUse =
+	local target =
 		position
 		+ direction * distance
 
-	positionToUse =
+	target =
 		Vector3.new(
-			positionToUse.X,
+			target.X,
 			position.Y + 2.7,
-			positionToUse.Z
-		)
-
-	local lookPosition =
-		Vector3.new(
-			position.X,
-			positionToUse.Y,
-			position.Z
+			target.Z
 		)
 
 	pcall(function()
 		character:PivotTo(
 			CFrame.lookAt(
-				positionToUse,
-				lookPosition
+				target,
+
+				Vector3.new(
+					position.X,
+					target.Y,
+					position.Z
+				)
 			)
 		)
 	end)
@@ -1118,38 +1512,28 @@ local function moveObjectInFront(
 		Workspace.CurrentCamera
 		or Camera
 
-	distance = distance or 5
+	distance =
+		distance or 4.5
 
 	if Camera then
 		return setObjectPivot(
 			object,
+
 			Camera.CFrame
-				* CFrame.new(
-					0,
-					0,
-					-distance
-				)
-		)
-	end
-
-	local root = getRoot()
-
-	if root then
-		return setObjectPivot(
-			object,
-			root.CFrame
-				* CFrame.new(
-					0,
-					0,
-					-3
-				)
+			* CFrame.new(
+				0,
+				0,
+				-distance
+			)
 		)
 	end
 
 	return false
 end
 
---// CLICKING
+--==================================================
+-- CLICKING
+--==================================================
 
 local function directClick(detector)
 	if not detector
@@ -1160,7 +1544,9 @@ local function directClick(detector)
 
 	applyClickDetector(detector)
 
-	if type(fireclickdetector) == "function" then
+	if type(fireclickdetector)
+		== "function" then
+
 		return pcall(function()
 			fireclickdetector(detector)
 		end)
@@ -1225,45 +1611,6 @@ local function screenClickPart(part)
 		end
 	end
 
-	if type(mousemoveabs) == "function"
-		and type(mouse1click) == "function" then
-
-		return pcall(function()
-			mousemoveabs(
-				position.X,
-				position.Y
-			)
-
-			mouse1click()
-		end)
-	end
-
-	return false
-end
-
-local function clickObjectOnce(object)
-	if not object
-		or not object.Parent then
-
-		return false
-	end
-
-	local detector =
-		getClickDetector(object)
-
-	if detector
-		and directClick(detector) then
-
-		return true
-	end
-
-	local part =
-		getMainPart(object)
-
-	if part then
-		return screenClickPart(part)
-	end
-
 	return false
 end
 
@@ -1278,47 +1625,41 @@ local function clickObjectBurst(
 		return false
 	end
 
-	count = count or NORMAL_CLICK_BURST
-	gap = gap or CLICK_GAP
+	count =
+		count or NORMAL_CLICK_BURST
 
-	local detector =
-		getClickDetector(object)
+	gap =
+		gap or CLICK_GAP
 
-	local succeeded = false
+	local success = false
 
 	for _ = 1, count do
-		if not object
-			or not object.Parent then
-
-			succeeded = true
-			break
+		if not object.Parent then
+			return true
 		end
 
-		local currentSuccess = false
+		local detector =
+			getClickDetector(object)
 
-		if detector
-			and detector.Parent then
+		local clicked = false
 
-			currentSuccess =
+		if detector then
+			clicked =
 				directClick(detector)
 		end
 
-		if not currentSuccess then
+		if not clicked then
 			local part =
 				getMainPart(object)
 
 			if part then
-				currentSuccess =
+				clicked =
 					screenClickPart(part)
 			end
 		end
 
-		if currentSuccess then
-			succeeded = true
-		end
-
-		if not object.Parent then
-			break
+		if clicked then
+			success = true
 		end
 
 		if noPickupCooldownEnabled then
@@ -1328,10 +1669,12 @@ local function clickObjectBurst(
 		end
 	end
 
-	return succeeded
+	return success
 end
 
---// PICKUP SEQUENCE
+--==================================================
+-- PICKUP
+--==================================================
 
 local function pickupObject(
 	object,
@@ -1345,12 +1688,11 @@ local function pickupObject(
 		return false
 	end
 
-	-- prevents hammering the exact same surviving instance
-	local previousAttempt =
+	local previous =
 		recentAttempts[object]
 
-	if previousAttempt
-		and os.clock() - previousAttempt < 0.08 then
+	if previous
+		and os.clock() - previous < 0.08 then
 
 		return false
 	end
@@ -1364,7 +1706,8 @@ local function pickupObject(
 		local root = getRoot()
 
 		local part =
-			getMainPart(object)
+			options.InteractionPart
+			or getMainPart(object)
 
 		if not character
 			or not root
@@ -1383,9 +1726,6 @@ local function pickupObject(
 			return false
 		end
 
-		local originalWorldPosition =
-			oldObjectPivot.Position
-
 		local unlockCamera
 
 		if options.LockCamera ~= false then
@@ -1393,19 +1733,18 @@ local function pickupObject(
 				lockCamera()
 		else
 			unlockCamera =
-				function()
-				end
+				function() end
 		end
 
-		-- First TP player near where object ACTUALLY was.
-
 		moveCharacterNearPosition(
-			originalWorldPosition,
+			part.Position,
+
 			options.Distance
-				or PICKUP_DISTANCE
+			or PICKUP_DISTANCE
 		)
 
 		RunService.Heartbeat:Wait()
+		RunService.RenderStepped:Wait()
 
 		if not object.Parent then
 			pcall(function()
@@ -1415,15 +1754,14 @@ local function pickupObject(
 			end)
 
 			unlockCamera()
-
 			return true
 		end
 
-		-- Now put object directly in front of the locked camera.
-
 		moveObjectInFront(
 			object,
-			options.FrontDistance or 5
+
+			options.FrontDistance
+			or 4.5
 		)
 
 		RunService.RenderStepped:Wait()
@@ -1431,25 +1769,22 @@ local function pickupObject(
 		local clicked =
 			clickObjectBurst(
 				object,
+
 				options.ClickCount
-					or NORMAL_CLICK_BURST,
+				or NORMAL_CLICK_BURST,
+
 				options.ClickGap
-					or CLICK_GAP
+				or CLICK_GAP
 			)
 
-		-- Restore object if the game did not remove it.
-
 		if object
-			and object.Parent
-			and oldObjectPivot then
+			and object.Parent then
 
 			setObjectPivot(
 				object,
 				oldObjectPivot
 			)
 		end
-
-		-- Restore player.
 
 		if character
 			and character.Parent then
@@ -1469,21 +1804,25 @@ local function pickupObject(
 	end)
 end
 
---// CACHE HELPERS
+--==================================================
+-- CACHE HELPERS
+--==================================================
 
 local function getCachedList(cache)
-	local result = {}
+	local list = {}
 
 	for object in pairs(cache) do
-		if object and object.Parent then
+		if object
+			and object.Parent then
+
 			table.insert(
-				result,
+				list,
 				object
 			)
 		end
 	end
 
-	return result
+	return list
 end
 
 local function getNearest(cache)
@@ -1505,23 +1844,27 @@ local function getNearest(cache)
 	return list[1]
 end
 
---// AUTO SELL
---// IMPORTANT:
---// CAMERA IS NOT LOCKED HERE
+--==================================================
+-- SELL
+--==================================================
 
 local function getSellSearchObjects(sellPart)
 	local result = {}
 	local seen = {}
 
 	local function add(object)
-		if object and not seen[object] then
-			seen[object] = true
+		if not object
+			or seen[object] then
 
-			table.insert(
-				result,
-				object
-			)
+			return
 		end
+
+		seen[object] = true
+
+		table.insert(
+			result,
+			object
+		)
 	end
 
 	add(sellPart)
@@ -1532,8 +1875,7 @@ local function getSellSearchObjects(sellPart)
 		add(object)
 	end
 
-	local parent =
-		sellPart.Parent
+	local parent = sellPart.Parent
 
 	if parent
 		and parent ~= Workspace then
@@ -1547,65 +1889,36 @@ local function getSellSearchObjects(sellPart)
 		end
 	end
 
-	local grandParent =
-		parent
-		and parent.Parent
-
-	if grandParent
-		and grandParent ~= Workspace
-		and grandParent ~= game then
-
-		for _, object in ipairs(
-			grandParent:GetDescendants()
-		) do
-			if object:IsA("ClickDetector")
-				or object:IsA("ProximityPrompt")
-				or object.Name == "SellPart" then
-
-				add(object)
-			end
-		end
-	end
-
 	return result
 end
 
 local function scanSellPart(sellPart)
-	if not sellPart
-		or not sellPart.Parent then
-
-		return nil
-	end
-
 	local result = {
 		InteractionPart =
 			getMainPart(sellPart),
 
-		ClickDetector = nil,
-
-		Prompt = nil
+		ClickDetector = nil
 	}
 
-	local mainPart =
+	local main =
 		getMainPart(sellPart)
 
-	local bestClickScore =
-		math.huge
+	local bestScore = math.huge
 
 	for _, object in ipairs(
 		getSellSearchObjects(sellPart)
 	) do
 		if object:IsA("ClickDetector") then
-			local clickPart =
+			local part =
 				getPartFromObject(object)
 
 			local score = 20
 
-			if clickPart == mainPart then
+			if part == main then
 				score = 0
 
-			elseif clickPart
-				and clickPart.Name == "SellPart" then
+			elseif part
+				and part.Name == "SellPart" then
 
 				score = 1
 
@@ -1613,22 +1926,17 @@ local function scanSellPart(sellPart)
 				score = 2
 			end
 
-			if score < bestClickScore then
-				bestClickScore = score
+			if score < bestScore then
+				bestScore = score
 
 				result.ClickDetector =
 					object
 
-				if clickPart then
+				if part then
 					result.InteractionPart =
-						clickPart
+						part
 				end
 			end
-
-		elseif object:IsA("ProximityPrompt") then
-			result.Prompt =
-				result.Prompt
-				or object
 		end
 	end
 
@@ -1647,21 +1955,14 @@ local function sellOnePart(sellPart)
 		local scan =
 			scanSellPart(sellPart)
 
-		if not scan then
-			return false
-		end
-
 		local character = getCharacter()
 		local root = getRoot()
 		local humanoid = getHumanoid()
 
-		local part =
-			scan.InteractionPart
-			or getMainPart(sellPart)
-
-		if not character
+		if not scan
+			or not character
 			or not root
-			or not part then
+			or not scan.InteractionPart then
 
 			return false
 		end
@@ -1679,41 +1980,31 @@ local function sellOnePart(sellPart)
 				humanoid.AutoRotate
 		end
 
-		-- freeze player
-
 		pcall(function()
 			root.Anchored = true
 		end)
 
 		if humanoid then
-			pcall(function()
-				humanoid.AutoRotate = false
-			end)
+			humanoid.AutoRotate = false
 		end
 
-		-- REAL TP TO SELLPART
+		-- Auto Sell does NOT lock camera.
 
 		moveCharacterNearPosition(
-			part.Position,
+			scan.InteractionPart.Position,
 			SELL_DISTANCE
 		)
-
-		stopVelocity()
 
 		task.wait(0.1)
 
 		local clicked = false
 
-		if scan.ClickDetector
-			and scan.ClickDetector.Parent then
-
+		if scan.ClickDetector then
 			for _ = 1, SELL_CLICK_BURST do
-				local success =
-					directClick(
-						scan.ClickDetector
-					)
+				if directClick(
+					scan.ClickDetector
+				) then
 
-				if success then
 					clicked = true
 				end
 
@@ -1723,7 +2014,10 @@ local function sellOnePart(sellPart)
 
 		if not clicked then
 			for _ = 1, SELL_CLICK_BURST do
-				if screenClickPart(part) then
+				if screenClickPart(
+					scan.InteractionPart
+				) then
+
 					clicked = true
 				end
 
@@ -1731,41 +2025,25 @@ local function sellOnePart(sellPart)
 			end
 		end
 
-		task.wait(0.05)
-
-		-- return
-
-		if character
-			and character.Parent then
-
-			pcall(function()
-				character:PivotTo(
-					oldPivot
-				)
-			end)
+		if character.Parent then
+			character:PivotTo(
+				oldPivot
+			)
 
 			stopVelocity()
 		end
 
-		-- unfreeze
-
-		if root
-			and root.Parent then
-
-			pcall(function()
-				root.Anchored =
-					oldAnchored
-			end)
+		if root.Parent then
+			root.Anchored =
+				oldAnchored
 		end
 
 		if humanoid
 			and humanoid.Parent
 			and oldAutoRotate ~= nil then
 
-			pcall(function()
-				humanoid.AutoRotate =
-					oldAutoRotate
-			end)
+			humanoid.AutoRotate =
+				oldAutoRotate
 		end
 
 		return clicked
@@ -1778,22 +2056,8 @@ local function sellNow()
 			sellCache
 		)
 
-	if #list == 0 then
-		return false
-	end
-
-	table.sort(
-		list,
-		function(a, b)
-			return getDistanceTo(a)
-				< getDistanceTo(b)
-		end
-	)
-
 	for _, sellPart in ipairs(list) do
-		if sellPart.Parent
-			and sellOnePart(sellPart) then
-
+		if sellOnePart(sellPart) then
 			return true
 		end
 	end
@@ -1801,8 +2065,9 @@ local function sellNow()
 	return false
 end
 
---// AUTO FARM
---// 4 HAY -> SELL -> REPEAT
+--==================================================
+-- AUTO FARM
+--==================================================
 
 local function startAutoFarm()
 	if autoFarmEnabled then
@@ -1818,19 +2083,18 @@ local function startAutoFarm()
 			and screenGui.Parent do
 
 			local collected = 0
-			local usedThisRound = {}
+			local used = {}
 
 			while autoFarmEnabled
-				and collected
-					< FARM_PICKUPS_PER_SELL do
+				and collected < FARM_PICKUPS_PER_SELL do
 
-				local hayList =
+				local list =
 					getCachedList(
 						hayCache
 					)
 
 				table.sort(
-					hayList,
+					list,
 					function(a, b)
 						return getDistanceTo(a)
 							< getDistanceTo(b)
@@ -1839,9 +2103,9 @@ local function startAutoFarm()
 
 				local target
 
-				for _, hay in ipairs(hayList) do
+				for _, hay in ipairs(list) do
 					if hay.Parent
-						and not usedThisRound[hay] then
+						and not used[hay] then
 
 						target = hay
 						break
@@ -1849,30 +2113,22 @@ local function startAutoFarm()
 				end
 
 				if not target then
-					task.wait(0.1)
 					break
 				end
 
-				usedThisRound[target] =
-					true
+				used[target] = true
 
 				pickupObject(
 					target,
 					{
 						LockCamera = true,
-						ClickCount = NORMAL_CLICK_BURST,
-						Distance = PICKUP_DISTANCE,
-						FrontDistance = 5
+						ClickCount = NORMAL_CLICK_BURST
 					}
 				)
 
 				collected += 1
 
-				task.wait(
-					noPickupCooldownEnabled
-					and 0.01
-					or 0.04
-				)
+				task.wait(0.04)
 			end
 
 			if autoFarmEnabled
@@ -1890,8 +2146,6 @@ local function stopAutoFarm()
 	autoFarmEnabled = false
 end
 
---// AUTO HAY
-
 local function startAutoHay()
 	if autoHayEnabled then
 		return
@@ -1900,6 +2154,7 @@ local function startAutoHay()
 	autoHayEnabled = true
 
 	task.spawn(function()
+
 		while autoHayEnabled
 			and screenGui
 			and screenGui.Parent do
@@ -1907,23 +2162,16 @@ local function startAutoHay()
 			local hay =
 				getNearest(hayCache)
 
-			if hay and hay.Parent then
+			if hay then
 				pickupObject(
 					hay,
 					{
-						LockCamera = true,
-						ClickCount = NORMAL_CLICK_BURST
+						LockCamera = true
 					}
 				)
-			else
-				task.wait(0.1)
 			end
 
-			task.wait(
-				noPickupCooldownEnabled
-				and 0.01
-				or 0.05
-			)
+			task.wait(0.05)
 		end
 	end)
 end
@@ -1931,8 +2179,6 @@ end
 local function stopAutoHay()
 	autoHayEnabled = false
 end
-
---// AUTO SELL LOOP
 
 local function startAutoSell()
 	if autoSellEnabled then
@@ -1949,15 +2195,9 @@ local function startAutoSell()
 
 			sellNow()
 
-			local started =
-				os.clock()
-
-			while autoSellEnabled
-				and os.clock() - started
-					< AUTO_SELL_INTERVAL do
-
-				task.wait(0.1)
-			end
+			task.wait(
+				AUTO_SELL_INTERVAL
+			)
 		end
 	end)
 end
@@ -1966,7 +2206,9 @@ local function stopAutoSell()
 	autoSellEnabled = false
 end
 
---// DIAMOND
+--==================================================
+-- DIAMOND
+--==================================================
 
 local function startAutoDiamond()
 	if autoDiamondEnabled then
@@ -1975,10 +2217,10 @@ local function startAutoDiamond()
 
 	autoDiamondEnabled = true
 
-	for object in pairs(diamondCache) do
-		if object.Parent then
-			queueDiamond(object)
-		end
+	for object in pairs(
+		diamondCache
+	) do
+		queueDiamond(object)
 	end
 
 	task.spawn(function()
@@ -2002,24 +2244,9 @@ local function startAutoDiamond()
 						{
 							LockCamera = true,
 							ClickCount = STRONG_CLICK_BURST,
-							FrontDistance = 5
+							FrontDistance = 4
 						}
 					)
-
-					if object.Parent
-						and autoDiamondEnabled then
-
-						task.delay(
-							0.4,
-							function()
-								if autoDiamondEnabled
-									and object.Parent then
-
-									queueDiamond(object)
-								end
-							end
-						)
-					end
 				end
 			else
 				task.wait(0.08)
@@ -2031,16 +2258,14 @@ end
 local function stopAutoDiamond()
 	autoDiamondEnabled = false
 
-	table.clear(diamondQueue)
-
-	for object in pairs(diamondQueued) do
-		diamondQueued[object] = nil
-	end
+	table.clear(
+		diamondQueue
+	)
 end
 
---// COLOR HAY
---// CAMERA LOCKED
---// STRONG 8-CLICK BURST
+--==================================================
+-- COLOR HAY
+--==================================================
 
 local function startAutoColorHay()
 	if autoColorHayEnabled then
@@ -2048,19 +2273,6 @@ local function startAutoColorHay()
 	end
 
 	autoColorHayEnabled = true
-
-	for hay, state in pairs(
-		colorHayState
-	) do
-		if hay.Parent
-			and state.LastChanged > 0
-			and os.clock()
-				- state.LastChanged
-				< 1.5 then
-
-			queueColorHay(hay)
-		end
-	end
 
 	task.spawn(function()
 
@@ -2078,24 +2290,15 @@ local function startAutoColorHay()
 				colorHayQueued[hay] = nil
 
 				if hay.Parent then
-					local state =
-						colorHayState[hay]
-
-					if state
-						and os.clock()
-							- state.LastChanged
-							<= 1.5 then
-
-						pickupObject(
-							hay,
-							{
-								LockCamera = true,
-								ClickCount = STRONG_CLICK_BURST,
-								ClickGap = 0.02,
-								FrontDistance = 4.5
-							}
-						)
-					end
+					pickupObject(
+						hay,
+						{
+							LockCamera = true,
+							ClickCount = STRONG_CLICK_BURST,
+							FrontDistance = 4,
+							ClickGap = 0.02
+						}
+					)
 				end
 			else
 				task.wait(0.05)
@@ -2107,14 +2310,14 @@ end
 local function stopAutoColorHay()
 	autoColorHayEnabled = false
 
-	table.clear(colorHayQueue)
-
-	for object in pairs(colorHayQueued) do
-		colorHayQueued[object] = nil
-	end
+	table.clear(
+		colorHayQueue
+	)
 end
 
---// AUTO FIND NEEDLE
+--==================================================
+-- NEEDLE
+--==================================================
 
 local function startAutoFindNeedle()
 	if autoFindNeedleEnabled then
@@ -2123,10 +2326,16 @@ local function startAutoFindNeedle()
 
 	autoFindNeedleEnabled = true
 
-	for object in pairs(needleCache) do
-		if object.Parent then
-			queueNeedle(object)
-		end
+	for _, object in ipairs(
+		Workspace:GetDescendants()
+	) do
+		registerNeedleCandidate(object)
+	end
+
+	for needle in pairs(
+		needleCache
+	) do
+		queueNeedle(needle)
 	end
 
 	task.spawn(function()
@@ -2135,35 +2344,44 @@ local function startAutoFindNeedle()
 			and screenGui
 			and screenGui.Parent do
 
-			local object =
+			local needle =
 				table.remove(
 					needleQueue,
 					1
 				)
 
-			if object then
-				needleQueued[object] = nil
+			if needle then
+				needleQueued[needle] = nil
 
-				if object.Parent then
-					local success =
+				if needle.Parent then
+					local previous =
+						needleLastAttempt[
+							needle
+						]
+
+					if not previous
+						or os.clock() - previous
+							>= NEEDLE_RETRY_DELAY then
+
+						needleLastAttempt[needle] =
+							os.clock()
+
 						pickupObject(
-							object,
+							resolveNeedleRoot(
+								needle
+							) or needle,
+
 							{
 								LockCamera = true,
-								ClickCount = STRONG_CLICK_BURST
+								ClickCount = NEEDLE_CLICK_BURST,
+								FrontDistance = 4,
+								Distance = 2.5
 							}
-						)
-
-					if success then
-						notify(
-							"Needle",
-							"Needle interaction sent.",
-							2
 						)
 					end
 				end
 			else
-				task.wait(0.1)
+				task.wait(0.08)
 			end
 		end
 	end)
@@ -2172,14 +2390,14 @@ end
 local function stopAutoFindNeedle()
 	autoFindNeedleEnabled = false
 
-	table.clear(needleQueue)
-
-	for object in pairs(needleQueued) do
-		needleQueued[object] = nil
-	end
+	table.clear(
+		needleQueue
+	)
 end
 
---// AUTO FIND KEY
+--==================================================
+-- KEY
+--==================================================
 
 local function startAutoFindKey()
 	if autoFindKeyEnabled then
@@ -2188,10 +2406,16 @@ local function startAutoFindKey()
 
 	autoFindKeyEnabled = true
 
-	for object in pairs(keyCache) do
-		if object.Parent then
-			queueKey(object)
-		end
+	for _, object in ipairs(
+		Workspace:GetDescendants()
+	) do
+		registerKeyCandidate(object)
+	end
+
+	for key in pairs(
+		keyCache
+	) do
+		queueKey(key)
 	end
 
 	task.spawn(function()
@@ -2200,35 +2424,43 @@ local function startAutoFindKey()
 			and screenGui
 			and screenGui.Parent do
 
-			local object =
+			local key =
 				table.remove(
 					keyQueue,
 					1
 				)
 
-			if object then
-				keyQueued[object] = nil
+			if key then
+				keyQueued[key] = nil
 
-				if object.Parent then
-					local success =
+				if key.Parent then
+					local previous =
+						keyLastAttempt[
+							key
+						]
+
+					if not previous
+						or os.clock() - previous
+							>= KEY_RETRY_DELAY then
+
+						keyLastAttempt[key] =
+							os.clock()
+
 						pickupObject(
-							object,
+							resolveKeyRoot(key)
+								or key,
+
 							{
 								LockCamera = true,
-								ClickCount = STRONG_CLICK_BURST
+								ClickCount = KEY_CLICK_BURST,
+								FrontDistance = 4,
+								Distance = 2.5
 							}
-						)
-
-					if success then
-						notify(
-							"Key",
-							"Key interaction sent.",
-							2
 						)
 					end
 				end
 			else
-				task.wait(0.1)
+				task.wait(0.08)
 			end
 		end
 	end)
@@ -2237,111 +2469,14 @@ end
 local function stopAutoFindKey()
 	autoFindKeyEnabled = false
 
-	table.clear(keyQueue)
-
-	for object in pairs(keyQueued) do
-		keyQueued[object] = nil
-	end
-end
-
---// INF RANGE
---// CAMERA LOCKED
-
-local function getRayTarget()
-	if Mouse and Mouse.Target then
-		return Mouse.Target
-	end
-
-	Camera =
-		Workspace.CurrentCamera
-		or Camera
-
-	if not Camera then
-		return nil
-	end
-
-	local viewport =
-		Camera.ViewportSize
-
-	local ray =
-		Camera:ViewportPointToRay(
-			viewport.X / 2,
-			viewport.Y / 2
-		)
-
-	local params =
-		RaycastParams.new()
-
-	params.FilterType =
-		Enum.RaycastFilterType.Exclude
-
-	if LocalPlayer.Character then
-		params.FilterDescendantsInstances = {
-			LocalPlayer.Character
-		}
-	end
-
-	local result =
-		Workspace:Raycast(
-			ray.Origin,
-			ray.Direction * 10000,
-			params
-		)
-
-	return result and result.Instance or nil
-end
-
-track(
-	UserInputService.InputBegan:Connect(function(
-		input,
-		processed
+	table.clear(
+		keyQueue
 	)
-		if processed
-			or not infRangeEnabled
-			or interactionBusy then
+end
 
-			return
-		end
-
-		if input.UserInputType
-				~= Enum.UserInputType.MouseButton1
-			and input.UserInputType
-				~= Enum.UserInputType.Touch then
-
-			return
-		end
-
-		local target =
-			getRayTarget()
-
-		if not target then
-			return
-		end
-
-		local pickup =
-			getTrackedPickupRoot(
-				target
-			)
-
-		if not pickup then
-			return
-		end
-
-		task.spawn(function()
-			pickupObject(
-				pickup,
-				{
-					LockCamera = true,
-					ClickCount = STRONG_CLICK_BURST,
-					ClickGap = 0.02,
-					FrontDistance = 4.5
-				}
-			)
-		end)
-	end)
-)
-
---// UFO EVENT
+--==================================================
+-- UFO
+--==================================================
 
 local function startUfoEvent()
 	local button =
@@ -2360,95 +2495,47 @@ local function startUfoEvent()
 
 	task.spawn(function()
 
-		withInteractionLock(function()
+		local character =
+			getCharacter()
 
-			local character = getCharacter()
-			local root = getRoot()
-			local humanoid = getHumanoid()
-			local part = getMainPart(button)
+		local root =
+			getRoot()
 
-			if not character
-				or not root
-				or not part then
+		if not character
+			or not root then
 
-				return false
-			end
+			return
+		end
 
-			local oldPivot =
-				character:GetPivot()
+		local oldPivot =
+			character:GetPivot()
 
-			local oldAnchored =
-				root.Anchored
+		moveCharacterNearPosition(
+			getMainPart(button).Position,
+			UFO_DISTANCE
+		)
 
-			local oldAutoRotate
+		task.wait(0.08)
 
-			if humanoid then
-				oldAutoRotate =
-					humanoid.AutoRotate
-			end
+		clickObjectBurst(
+			button,
+			STRONG_CLICK_BURST,
+			0.025
+		)
 
-			pcall(function()
-				root.Anchored = true
-			end)
-
-			if humanoid then
-				pcall(function()
-					humanoid.AutoRotate = false
-				end)
-			end
-
-			moveCharacterNearPosition(
-				part.Position,
-				UFO_DISTANCE
+		if character.Parent then
+			character:PivotTo(
+				oldPivot
 			)
 
-			task.wait(0.08)
-
-			local success =
-				clickObjectBurst(
-					button,
-					STRONG_CLICK_BURST,
-					0.025
-				)
-
-			if character.Parent then
-				pcall(function()
-					character:PivotTo(
-						oldPivot
-					)
-				end)
-
-				stopVelocity()
-			end
-
-			if root.Parent then
-				root.Anchored =
-					oldAnchored
-			end
-
-			if humanoid
-				and humanoid.Parent
-				and oldAutoRotate ~= nil then
-
-				humanoid.AutoRotate =
-					oldAutoRotate
-			end
-
-			notify(
-				"UFO Event",
-				success
-					and "UFO button clicked."
-					or "Could not click UfoButtenPart.",
-				2,
-				success and nil or "danger"
-			)
-
-			return success
-		end)
+			stopVelocity()
+		end
 	end)
 end
 
---// PLAYER MODS
+--==================================================
+-- PLAYER MODS
+--==================================================
 
 local function setSpeed(state)
 	speedEnabled = state
@@ -2457,7 +2544,7 @@ local function setSpeed(state)
 		for humanoid, oldSpeed in pairs(
 			originalWalkSpeeds
 		) do
-			if humanoid and humanoid.Parent then
+			if humanoid.Parent then
 				humanoid.WalkSpeed =
 					oldSpeed
 			end
@@ -2469,55 +2556,39 @@ local function setThirdPerson(state)
 	thirdPersonEnabled = state
 
 	if not state then
-		pcall(function()
-			LocalPlayer.CameraMode =
-				originalCameraMode
+		LocalPlayer.CameraMode =
+			originalCameraMode
 
-			LocalPlayer.CameraMinZoomDistance =
-				originalMinZoom
+		LocalPlayer.CameraMinZoomDistance =
+			originalMinZoom
 
-			LocalPlayer.CameraMaxZoomDistance =
-				originalMaxZoom
-		end)
+		LocalPlayer.CameraMaxZoomDistance =
+			originalMaxZoom
 	end
 end
 
 local function clearFly()
 	if flyConnection then
-		pcall(function()
-			flyConnection:Disconnect()
-		end)
-
+		flyConnection:Disconnect()
 		flyConnection = nil
 	end
 
 	if flyVelocity then
-		pcall(function()
-			flyVelocity:Destroy()
-		end)
-
+		flyVelocity:Destroy()
 		flyVelocity = nil
 	end
 
 	if flyGyro then
-		pcall(function()
-			flyGyro:Destroy()
-		end)
-
+		flyGyro:Destroy()
 		flyGyro = nil
 	end
 
 	if flyHumanoid
 		and flyHumanoid.Parent then
 
-		pcall(function()
-			flyHumanoid.PlatformStand =
-				flyOldPlatformStand == true
-		end)
+		flyHumanoid.PlatformStand =
+			flyOldPlatformStand == true
 	end
-
-	flyHumanoid = nil
-	flyOldPlatformStand = nil
 end
 
 local function attachFly()
@@ -2530,12 +2601,13 @@ local function attachFly()
 	local root = getRoot()
 	local humanoid = getHumanoid()
 
-	if not root or not humanoid then
+	if not root
+		or not humanoid then
+
 		return
 	end
 
 	flyHumanoid = humanoid
-
 	flyOldPlatformStand =
 		humanoid.PlatformStand
 
@@ -2543,8 +2615,6 @@ local function attachFly()
 
 	flyVelocity =
 		create("BodyVelocity", {
-			Name = "THHFlyVelocity",
-
 			MaxForce =
 				Vector3.new(
 					1e9,
@@ -2562,8 +2632,6 @@ local function attachFly()
 
 	flyGyro =
 		create("BodyGyro", {
-			Name = "THHFlyGyro",
-
 			MaxTorque =
 				Vector3.new(
 					1e9,
@@ -2605,16 +2673,11 @@ local function attachFly()
 			local movement =
 				Vector3.zero
 
-			local keyboard =
-				false
-
 			if UserInputService:IsKeyDown(
 				Enum.KeyCode.W
 			) then
 				movement +=
 					Camera.CFrame.LookVector
-
-				keyboard = true
 			end
 
 			if UserInputService:IsKeyDown(
@@ -2622,8 +2685,6 @@ local function attachFly()
 			) then
 				movement -=
 					Camera.CFrame.LookVector
-
-				keyboard = true
 			end
 
 			if UserInputService:IsKeyDown(
@@ -2631,8 +2692,6 @@ local function attachFly()
 			) then
 				movement -=
 					Camera.CFrame.RightVector
-
-				keyboard = true
 			end
 
 			if UserInputService:IsKeyDown(
@@ -2640,15 +2699,10 @@ local function attachFly()
 			) then
 				movement +=
 					Camera.CFrame.RightVector
-
-				keyboard = true
 			end
 
-			if not keyboard
-				and humanoid.MoveDirection.Magnitude
-					> 0.05 then
-
-				movement +=
+			if movement.Magnitude < 0.05 then
+				movement =
 					humanoid.MoveDirection
 			end
 
@@ -2681,40 +2735,32 @@ local function attachFly()
 			end
 
 			local velocity =
-				Vector3.zero
+				Vector3.new(
+					0,
+					vertical * FLY_SPEED,
+					0
+				)
 
-			if movement.Magnitude > 0.01 then
+			if movement.Magnitude > 0.05 then
 				velocity +=
 					movement.Unit
 					* FLY_SPEED
 			end
 
-			velocity +=
-				Vector3.new(
-					0,
-					vertical
-						* FLY_SPEED,
-					0
-				)
-
 			flyVelocity.Velocity =
 				velocity
 
-			local look =
-				Vector3.new(
-					Camera.CFrame.LookVector.X,
-					0,
-					Camera.CFrame.LookVector.Z
-				)
+			flyGyro.CFrame =
+				CFrame.lookAt(
+					root.Position,
 
-			if look.Magnitude > 0.01 then
-				flyGyro.CFrame =
-					CFrame.lookAt(
-						root.Position,
-						root.Position
-							+ look.Unit
+					root.Position
+					+ Vector3.new(
+						Camera.CFrame.LookVector.X,
+						0,
+						Camera.CFrame.LookVector.Z
 					)
-			end
+				)
 		end)
 
 	track(flyConnection)
@@ -2741,11 +2787,9 @@ track(
 				getHumanoid()
 
 			if humanoid then
-				pcall(function()
-					humanoid:ChangeState(
-						Enum.HumanoidStateType.Jumping
-					)
-				end)
+				humanoid:ChangeState(
+					Enum.HumanoidStateType.Jumping
+				)
 			end
 		end
 	end)
@@ -2761,10 +2805,13 @@ track(
 				getHumanoid()
 
 			if humanoid then
-				if originalWalkSpeeds[humanoid]
-					== nil then
+				if originalWalkSpeeds[
+					humanoid
+				] == nil then
 
-					originalWalkSpeeds[humanoid] =
+					originalWalkSpeeds[
+						humanoid
+					] =
 						humanoid.WalkSpeed
 				end
 
@@ -2774,41 +2821,27 @@ track(
 		end
 
 		if thirdPersonEnabled then
-			pcall(function()
-				LocalPlayer.CameraMode =
-					Enum.CameraMode.Classic
+			LocalPlayer.CameraMode =
+				Enum.CameraMode.Classic
 
-				LocalPlayer.CameraMinZoomDistance =
-					0.5
+			LocalPlayer.CameraMinZoomDistance =
+				0.5
 
-				LocalPlayer.CameraMaxZoomDistance =
-					128
-			end)
+			LocalPlayer.CameraMaxZoomDistance =
+				128
 		end
 	end)
 )
 
-track(
-	LocalPlayer.CharacterAdded:Connect(function()
-
-		task.wait(0.5)
-
-		if flyEnabled then
-			attachFly()
-		end
-	end)
-)
-
---// PART NAME HOVER
+--==================================================
+-- PART NAME HOVER
+--==================================================
 
 local function stopPartNameHover()
 	partNameHoverEnabled = false
 
 	if partNameHoverConnection then
-		pcall(function()
-			partNameHoverConnection:Disconnect()
-		end)
-
+		partNameHoverConnection:Disconnect()
 		partNameHoverConnection = nil
 	end
 
@@ -2831,7 +2864,7 @@ local function startPartNameHover()
 				Colors.Card,
 
 			BackgroundTransparency =
-				0.04,
+				0.18,
 
 			BorderSizePixel = 0,
 
@@ -2860,18 +2893,18 @@ local function startPartNameHover()
 
 	corner(
 		partNameHoverLabel,
-		8
+		9
+	)
+
+	stroke(
+		partNameHoverLabel,
+		Colors.Stroke,
+		0.55,
+		1
 	)
 
 	partNameHoverConnection =
 		RunService.RenderStepped:Connect(function()
-
-			if not partNameHoverEnabled
-				or not partNameHoverLabel
-				or not partNameHoverLabel.Parent then
-
-				return
-			end
 
 			local target =
 				Mouse.Target
@@ -2883,7 +2916,7 @@ local function startPartNameHover()
 				return
 			end
 
-			local position =
+			local mousePosition =
 				UserInputService:GetMouseLocation()
 
 			partNameHoverLabel.Text =
@@ -2891,18 +2924,22 @@ local function startPartNameHover()
 
 			partNameHoverLabel.Position =
 				UDim2.fromOffset(
-					position.X + 14,
-					position.Y + 14
+					mousePosition.X + 14,
+					mousePosition.Y + 14
 				)
 
 			partNameHoverLabel.Visible =
 				true
 		end)
 
-	track(partNameHoverConnection)
+	track(
+		partNameHoverConnection
+	)
 end
 
---// CLEANUP
+--==================================================
+-- CLEANUP
+--==================================================
 
 local function cleanupAll(hardUnload)
 	if cleaning then
@@ -2933,27 +2970,23 @@ local function cleanupAll(hardUnload)
 	stopPartNameHover()
 	restoreInteractionSettings()
 
-	antiAfkEnabled = false
-
 	if antiAfkConnection then
-		pcall(function()
-			antiAfkConnection:Disconnect()
-		end)
-
+		antiAfkConnection:Disconnect()
 		antiAfkConnection = nil
 	end
 
 	for humanoid, speed in pairs(
 		originalWalkSpeeds
 	) do
-		if humanoid and humanoid.Parent then
-			pcall(function()
-				humanoid.WalkSpeed = speed
-			end)
+		if humanoid.Parent then
+			humanoid.WalkSpeed =
+				speed
 		end
 	end
 
-	for _, connection in ipairs(connections) do
+	for _, connection in ipairs(
+		connections
+	) do
 		pcall(function()
 			connection:Disconnect()
 		end)
@@ -2962,15 +2995,13 @@ local function cleanupAll(hardUnload)
 	table.clear(connections)
 
 	if screenGui then
-		pcall(function()
-			screenGui:Destroy()
-		end)
-
+		screenGui:Destroy()
 		screenGui = nil
 	end
 
 	if hardUnload then
-		_G.THHGrowersHardUnloaded = true
+		_G.THHGrowersHardUnloaded =
+			true
 	end
 
 	_G.THHGrowersCleanup = nil
@@ -2980,7 +3011,9 @@ _G.THHGrowersCleanup = function()
 	cleanupAll(false)
 end
 
---// GUI PARENT
+--==================================================
+-- GUI ROOT
+--==================================================
 
 local guiParent
 
@@ -3008,15 +3041,17 @@ screenGui =
 
 		IgnoreGuiInset = true,
 
+		DisplayOrder = 999999,
+
 		ZIndexBehavior =
 			Enum.ZIndexBehavior.Sibling,
-
-		DisplayOrder = 999999,
 
 		Parent = guiParent
 	})
 
---// NOTIFICATIONS
+--==================================================
+-- NOTIFICATIONS
+--==================================================
 
 notificationHolder =
 	create("Frame", {
@@ -3028,25 +3063,28 @@ notificationHolder =
 	Position =
 		UDim2.new(
 			1,
-			-14,
+			-16,
 			0,
-			14
+			16
 		),
 
 	Size =
 		UDim2.fromOffset(
-			300,
+			310,
 			500
 		),
 
-	ZIndex = 500,
+	ZIndex = 800,
 
 	Parent = screenGui
 })
 
 create("UIListLayout", {
 	Padding =
-		UDim.new(0, 7),
+		UDim.new(
+			0,
+			8
+		),
 
 	HorizontalAlignment =
 		Enum.HorizontalAlignment.Right,
@@ -3067,26 +3105,31 @@ notify =
 				BackgroundColor3 =
 					Colors.Card,
 
+				BackgroundTransparency =
+					0.12,
+
 				Size =
 					UDim2.fromOffset(
-						290,
-						72
+						300,
+						76
 					),
 
-				ZIndex = 501,
+				ZIndex = 801,
 
 				Parent =
 					notificationHolder
 			})
 
-		corner(card, 9)
+		corner(card, 12)
 
 		stroke(
 			card,
+
 			kind == "danger"
 				and Colors.Danger
-				or Colors.Accent,
-			0.3,
+				or Colors.Stroke,
+
+			0.45,
 			1
 		)
 
@@ -3095,14 +3138,14 @@ notify =
 
 			Position =
 				UDim2.fromOffset(
-					12,
-					8
+					14,
+					10
 				),
 
 			Size =
 				UDim2.new(
 					1,
-					-24,
+					-28,
 					0,
 					20
 				),
@@ -3120,7 +3163,7 @@ notify =
 			TextXAlignment =
 				Enum.TextXAlignment.Left,
 
-			ZIndex = 502,
+			ZIndex = 802,
 
 			Parent = card
 		})
@@ -3130,16 +3173,16 @@ notify =
 
 			Position =
 				UDim2.fromOffset(
-					12,
-					31
+					14,
+					34
 				),
 
 			Size =
 				UDim2.new(
 					1,
-					-24,
+					-28,
 					0,
-					30
+					28
 				),
 
 			Font =
@@ -3157,7 +3200,7 @@ notify =
 			TextXAlignment =
 				Enum.TextXAlignment.Left,
 
-			ZIndex = 502,
+			ZIndex = 802,
 
 			Parent = card
 		})
@@ -3166,14 +3209,16 @@ notify =
 			duration or 2.5,
 			function()
 
-				if card and card.Parent then
+				if card.Parent then
 					card:Destroy()
 				end
 			end
 		)
 	end
 
---// AUTH
+--==================================================
+-- AUTH FUNCTIONS
+--==================================================
 
 local function getVampauthClient()
 	if VampauthClient then
@@ -3189,13 +3234,15 @@ local function getVampauthClient()
 
 	local ok, source =
 		pcall(function()
+
 			return game:HttpGet(
 				VAMPAUTH_CLIENT_URL
 			)
 		end)
 
 	if not ok
-		or type(source) ~= "string" then
+		or type(source)
+			~= "string" then
 
 		return nil,
 			"Could not load Vampauth."
@@ -3208,7 +3255,8 @@ local function getVampauthClient()
 		)
 
 	if not compileOk
-		or type(chunk) ~= "function" then
+		or type(chunk)
+			~= "function" then
 
 		return nil,
 			"Could not start Vampauth."
@@ -3218,7 +3266,8 @@ local function getVampauthClient()
 		pcall(chunk)
 
 	if not moduleOk
-		or type(Vampauth) ~= "table"
+		or type(Vampauth)
+			~= "table"
 		or type(Vampauth.new)
 			~= "function" then
 
@@ -3230,8 +3279,12 @@ local function getVampauthClient()
 		pcall(function()
 
 			return Vampauth.new({
-				projectId = PROJECT_ID,
-				authSecret = AUTH_SECRET,
+				projectId =
+					PROJECT_ID,
+
+				authSecret =
+					AUTH_SECRET,
+
 				debug = false
 			})
 		end)
@@ -3273,95 +3326,427 @@ local function validateKey(key)
 		return true
 	end
 
-	if type(result) == "table" then
-		return false,
-			tostring(
+	return false,
+		type(result) == "table"
+			and tostring(
 				result.error
 				or result.message
 				or "Invalid key."
 			)
-	end
-
-	return false,
-		tostring(
-			result
-			or "Invalid key."
-		)
+			or tostring(
+				result
+				or "Invalid key."
+			)
 end
 
---// DRAG
+--==================================================
+-- DRAG
+--==================================================
 
 local function makeDraggable(frame, handle)
 	local dragging = false
+	local dragInput
 	local dragStart
 	local startPosition
 
-	handle.InputBegan:Connect(function(input)
+	track(
+		handle.InputBegan:Connect(function(input)
 
-		if input.UserInputType
-				== Enum.UserInputType.MouseButton1
-			or input.UserInputType
-				== Enum.UserInputType.Touch then
+			if input.UserInputType
+					== Enum.UserInputType.MouseButton1
+				or input.UserInputType
+					== Enum.UserInputType.Touch then
 
-			dragging = true
-			dragStart = input.Position
-			startPosition = frame.Position
-		end
-	end)
+				dragging = true
+				dragStart = input.Position
+				startPosition = frame.Position
+			end
+		end)
+	)
 
-	UserInputService.InputChanged:Connect(function(input)
+	track(
+		handle.InputChanged:Connect(function(input)
 
-		if not dragging then
-			return
-		end
+			if input.UserInputType
+					== Enum.UserInputType.MouseMovement
+				or input.UserInputType
+					== Enum.UserInputType.Touch then
 
-		if input.UserInputType
-				~= Enum.UserInputType.MouseMovement
-			and input.UserInputType
-				~= Enum.UserInputType.Touch then
+				dragInput = input
+			end
+		end)
+	)
 
-			return
-		end
+	track(
+		UserInputService.InputChanged:Connect(function(input)
 
-		local delta =
-			input.Position
-			- dragStart
+			if dragging
+				and input == dragInput then
 
-		frame.Position =
-			UDim2.new(
-				startPosition.X.Scale,
-				startPosition.X.Offset + delta.X,
-				startPosition.Y.Scale,
-				startPosition.Y.Offset + delta.Y
-			)
-	end)
+				local delta =
+					input.Position
+					- dragStart
 
-	UserInputService.InputEnded:Connect(function(input)
+				frame.Position =
+					UDim2.new(
+						startPosition.X.Scale,
 
-		if input.UserInputType
-				== Enum.UserInputType.MouseButton1
-			or input.UserInputType
-				== Enum.UserInputType.Touch then
+						startPosition.X.Offset
+							+ delta.X,
 
-			dragging = false
-		end
-	end)
+						startPosition.Y.Scale,
+
+						startPosition.Y.Offset
+							+ delta.Y
+					)
+			end
+		end)
+	)
+
+	track(
+		UserInputService.InputEnded:Connect(function(input)
+
+			if input.UserInputType
+					== Enum.UserInputType.MouseButton1
+				or input.UserInputType
+					== Enum.UserInputType.Touch then
+
+				dragging = false
+			end
+		end)
+	)
 end
 
---// MAIN GUI
+--==================================================
+-- DEVICE DRAWINGS
+--==================================================
+
+local function buildPcDrawing(parent)
+	local monitor =
+		create("Frame", {
+			BackgroundColor3 =
+				Color3.fromRGB(
+					40,
+					43,
+					49
+				),
+
+			Position =
+				UDim2.new(
+					0.5,
+					-65,
+					0,
+					18
+				),
+
+			Size =
+				UDim2.fromOffset(
+					130,
+					78
+				),
+
+			Parent = parent
+		})
+
+	corner(monitor, 9)
+
+	stroke(
+		monitor,
+		Colors.White,
+		0.35,
+		2
+	)
+
+	local screen =
+		create("Frame", {
+			BackgroundColor3 =
+				Color3.fromRGB(
+					92,
+					97,
+					108
+				),
+
+			Position =
+				UDim2.fromOffset(
+					7,
+					7
+				),
+
+			Size =
+				UDim2.new(
+					1,
+					-14,
+					1,
+					-20
+				),
+
+			Parent = monitor
+		})
+
+	corner(screen, 5)
+
+	addGlassGradient(screen)
+
+	create("Frame", {
+		BackgroundColor3 =
+			Color3.fromRGB(
+				220,
+				223,
+				228
+			),
+
+		BorderSizePixel = 0,
+
+		Position =
+			UDim2.new(
+				0.5,
+				-4,
+				1,
+				0
+			),
+
+		Size =
+			UDim2.fromOffset(
+				8,
+				24
+			),
+
+		Parent = monitor
+	})
+
+	local stand =
+		create("Frame", {
+			BackgroundColor3 =
+				Color3.fromRGB(
+					220,
+					223,
+					228
+				),
+
+			BorderSizePixel = 0,
+
+			Position =
+				UDim2.new(
+					0.5,
+					-32,
+					1,
+					20
+				),
+
+			Size =
+				UDim2.fromOffset(
+					64,
+					7
+				),
+
+			Parent = monitor
+		})
+
+	corner(stand, 4)
+
+	create("Frame", {
+		BackgroundColor3 =
+			Colors.Accent,
+
+		BorderSizePixel = 0,
+
+		Position =
+			UDim2.new(
+				1,
+				-14,
+				1,
+				-9
+			),
+
+		Size =
+			UDim2.fromOffset(
+				4,
+				4
+			),
+
+		Parent = monitor
+	})
+end
+
+local function buildPhoneDrawing(parent)
+	local phoneBody =
+		create("Frame", {
+			BackgroundColor3 =
+				Color3.fromRGB(
+					39,
+					42,
+					48
+				),
+
+			Position =
+				UDim2.new(
+					0.5,
+					-42,
+					0,
+					10
+				),
+
+			Size =
+				UDim2.fromOffset(
+					84,
+					130
+				),
+
+			Parent = parent
+		})
+
+	corner(phoneBody, 16)
+
+	stroke(
+		phoneBody,
+		Colors.White,
+		0.32,
+		2
+	)
+
+	local screen =
+		create("Frame", {
+			BackgroundColor3 =
+				Color3.fromRGB(
+					96,
+					100,
+					110
+				),
+
+			Position =
+				UDim2.fromOffset(
+					7,
+					15
+				),
+
+			Size =
+				UDim2.new(
+					1,
+					-14,
+					1,
+					-30
+				),
+
+			Parent = phoneBody
+		})
+
+	corner(screen, 9)
+
+	addGlassGradient(screen)
+
+	local speaker =
+		create("Frame", {
+			BackgroundColor3 =
+				Color3.fromRGB(
+					216,
+					219,
+					225
+				),
+
+			BorderSizePixel = 0,
+
+			Position =
+				UDim2.new(
+					0.5,
+					-10,
+					0,
+					7
+				),
+
+			Size =
+				UDim2.fromOffset(
+					20,
+					3
+				),
+
+			Parent = phoneBody
+		})
+
+	corner(speaker, 3)
+
+	local cameraDot =
+		create("Frame", {
+			BackgroundColor3 =
+				Color3.fromRGB(
+					145,
+					149,
+					160
+				),
+
+			BorderSizePixel = 0,
+
+			Position =
+				UDim2.new(
+					0.5,
+					-17,
+					0,
+					6
+				),
+
+			Size =
+				UDim2.fromOffset(
+					4,
+					4
+				),
+
+			Parent = phoneBody
+		})
+
+	corner(cameraDot, 4)
+
+	local home =
+		create("Frame", {
+			BackgroundColor3 =
+				Color3.fromRGB(
+					220,
+					223,
+					228
+				),
+
+			BorderSizePixel = 0,
+
+			Position =
+				UDim2.new(
+					0.5,
+					-14,
+					1,
+					-8
+				),
+
+			Size =
+				UDim2.fromOffset(
+					28,
+					3
+				),
+
+			Parent = phoneBody
+		})
+
+	corner(home, 3)
+end
+
+--==================================================
+-- MAIN MENU
+--==================================================
 
 local function buildMainMenu(mode)
 	local phoneMode =
 		mode == "PHONE"
 
 	local width =
-		phoneMode and 440 or 710
+		phoneMode
+			and 445
+			or 720
 
 	local height =
-		phoneMode and 620 or 470
+		phoneMode
+			and 625
+			or 470
 
 	local sidebarWidth =
-		phoneMode and 115 or 175
+		phoneMode
+			and 116
+			or 182
 
 	mainFrame =
 		create("Frame", {
@@ -3384,7 +3769,10 @@ local function buildMainMenu(mode)
 				),
 
 			BackgroundColor3 =
-				Colors.Background,
+				Colors.Main,
+
+			BackgroundTransparency =
+				0.12,
 
 			BorderSizePixel = 0,
 
@@ -3393,14 +3781,57 @@ local function buildMainMenu(mode)
 			Parent = screenGui
 		})
 
-	corner(mainFrame, 12)
+	corner(
+		mainFrame,
+		16
+	)
 
 	stroke(
 		mainFrame,
 		Colors.Stroke,
-		0,
-		1
+		0.42,
+		1.25
 	)
+
+	addGlassGradient(
+		mainFrame
+	)
+
+	create("ImageLabel", {
+		BackgroundTransparency = 1,
+
+		Image =
+			"rbxassetid://1316045217",
+
+		ImageColor3 =
+			Color3.fromRGB(
+				255,
+				255,
+				255
+			),
+
+		ImageTransparency =
+			0.93,
+
+		ScaleType =
+			Enum.ScaleType.Tile,
+
+		TileSize =
+			UDim2.fromOffset(
+				120,
+				120
+			),
+
+		Size =
+			UDim2.fromScale(
+				1,
+				1
+			),
+
+		ZIndex = 0,
+
+		Parent = mainFrame
+	})
 
 	if phoneMode then
 		mainScale =
@@ -3421,14 +3852,19 @@ local function buildMainMenu(mode)
 			mainScale.Scale =
 				math.clamp(
 					math.min(
-						(Camera.ViewportSize.X - 15)
-							/ width,
+						(
+							Camera.ViewportSize.X
+							- 18
+						) / width,
 
-						(Camera.ViewportSize.Y - 20)
-							/ height,
+						(
+							Camera.ViewportSize.Y
+							- 18
+						) / height,
 
 						1
 					),
+
 					0.45,
 					1
 				)
@@ -3440,15 +3876,24 @@ local function buildMainMenu(mode)
 			track(
 				Camera:GetPropertyChangedSignal(
 					"ViewportSize"
-				):Connect(updateScale)
+				):Connect(
+					updateScale
+				)
 			)
 		end
 	end
+
+	-- Sidebar
 
 	local sidebar =
 		create("Frame", {
 			BackgroundColor3 =
 				Colors.Sidebar,
+
+			BackgroundTransparency =
+				0.14,
+
+			BorderSizePixel = 0,
 
 			Size =
 				UDim2.new(
@@ -3458,20 +3903,86 @@ local function buildMainMenu(mode)
 					0
 				),
 
-			BorderSizePixel = 0,
+			ZIndex = 2,
 
 			Parent = mainFrame
 		})
 
-	local icon =
-		create("ImageLabel", {
+	create("Frame", {
+		BackgroundColor3 =
+			Colors.White,
+
+		BackgroundTransparency =
+			0.84,
+
+		BorderSizePixel = 0,
+
+		Position =
+			UDim2.new(
+				1,
+				-1,
+				0,
+				0
+			),
+
+		Size =
+			UDim2.new(
+				0,
+				1,
+				1,
+				0
+			),
+
+		ZIndex = 3,
+
+		Parent = sidebar
+	})
+
+	local brand =
+		create("Frame", {
 			BackgroundColor3 =
 				Colors.Card,
 
+			BackgroundTransparency =
+				0.28,
+
 			Position =
 				UDim2.fromOffset(
-					12,
+					10,
 					12
+				),
+
+			Size =
+				UDim2.new(
+					1,
+					-20,
+					0,
+					58
+				),
+
+			ZIndex = 3,
+
+			Parent = sidebar
+		})
+
+	corner(brand, 12)
+
+	stroke(
+		brand,
+		Colors.Stroke,
+		0.65,
+		1
+	)
+
+	local gameIcon =
+		create("ImageLabel", {
+			BackgroundColor3 =
+				Colors.CardDark,
+
+			Position =
+				UDim2.fromOffset(
+					8,
+					8
 				),
 
 			Size =
@@ -3485,26 +3996,28 @@ local function buildMainMenu(mode)
 			ScaleType =
 				Enum.ScaleType.Crop,
 
-			Parent = sidebar
+			ZIndex = 4,
+
+			Parent = brand
 		})
 
-	corner(icon, 9)
+	corner(gameIcon, 10)
 
 	create("TextLabel", {
 		BackgroundTransparency = 1,
 
 		Position =
 			UDim2.fromOffset(
-				62,
-				12
+				58,
+				8
 			),
 
 		Size =
 			UDim2.new(
 				1,
-				-66,
+				-64,
 				0,
-				24
+				22
 			),
 
 		Font =
@@ -3512,8 +4025,8 @@ local function buildMainMenu(mode)
 
 		Text =
 			phoneMode
-			and "THH"
-			or "THH HUB",
+				and "THH"
+				or "THH HUB",
 
 		TextColor3 =
 			Colors.Text,
@@ -3523,7 +4036,9 @@ local function buildMainMenu(mode)
 		TextXAlignment =
 			Enum.TextXAlignment.Left,
 
-		Parent = sidebar
+		ZIndex = 4,
+
+		Parent = brand
 	})
 
 	create("TextLabel", {
@@ -3531,14 +4046,14 @@ local function buildMainMenu(mode)
 
 		Position =
 			UDim2.fromOffset(
-				62,
-				35
+				58,
+				29
 			),
 
 		Size =
 			UDim2.new(
 				1,
-				-66,
+				-64,
 				0,
 				18
 			),
@@ -3548,8 +4063,8 @@ local function buildMainMenu(mode)
 
 		Text =
 			phoneMode
-			and "PHONE"
-			or "PC",
+				and "Mobile"
+				or "Desktop",
 
 		TextColor3 =
 			Colors.SubText,
@@ -3559,7 +4074,146 @@ local function buildMainMenu(mode)
 		TextXAlignment =
 			Enum.TextXAlignment.Left,
 
-		Parent = sidebar
+		ZIndex = 4,
+
+		Parent = brand
+	})
+
+	local profile =
+		create("Frame", {
+			BackgroundColor3 =
+				Colors.Card,
+
+			BackgroundTransparency =
+				0.32,
+
+			Position =
+				UDim2.fromOffset(
+					10,
+					80
+				),
+
+			Size =
+				UDim2.new(
+					1,
+					-20,
+					0,
+					66
+				),
+
+			ZIndex = 3,
+
+			Parent = sidebar
+		})
+
+	corner(profile, 12)
+
+	local avatar =
+		create("ImageLabel", {
+			BackgroundColor3 =
+				Colors.CardDark,
+
+			Position =
+				UDim2.fromOffset(
+					9,
+					12
+				),
+
+			Size =
+				UDim2.fromOffset(
+					42,
+					42
+				),
+
+			Image =
+				PLAYER_ICON,
+
+			ScaleType =
+				Enum.ScaleType.Crop,
+
+			ZIndex = 4,
+
+			Parent = profile
+		})
+
+	corner(avatar, 21)
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+
+		Position =
+			UDim2.fromOffset(
+				58,
+				11
+			),
+
+		Size =
+			UDim2.new(
+				1,
+				-62,
+				0,
+				20
+			),
+
+		Font =
+			Enum.Font.GothamSemibold,
+
+		Text =
+			LocalPlayer.DisplayName,
+
+		TextColor3 =
+			Colors.Text,
+
+		TextSize = 10,
+
+		TextTruncate =
+			Enum.TextTruncate.AtEnd,
+
+		TextXAlignment =
+			Enum.TextXAlignment.Left,
+
+		ZIndex = 4,
+
+		Parent = profile
+	})
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+
+		Position =
+			UDim2.fromOffset(
+				58,
+				33
+			),
+
+		Size =
+			UDim2.new(
+				1,
+				-62,
+				0,
+				18
+			),
+
+		Font =
+			Enum.Font.Gotham,
+
+		Text =
+			"@" .. LocalPlayer.Name,
+
+		TextColor3 =
+			Colors.SubText,
+
+		TextSize = 8,
+
+		TextTruncate =
+			Enum.TextTruncate.AtEnd,
+
+		TextXAlignment =
+			Enum.TextXAlignment.Left,
+
+		ZIndex = 4,
+
+		Parent = profile
 	})
 
 	local navHolder =
@@ -3570,16 +4224,16 @@ local function buildMainMenu(mode)
 
 			Position =
 				UDim2.fromOffset(
-					8,
-					70
+					10,
+					158
 				),
 
 			Size =
 				UDim2.new(
 					1,
-					-16,
+					-20,
 					1,
-					-80
+					-168
 				),
 
 			CanvasSize =
@@ -3589,6 +4243,11 @@ local function buildMainMenu(mode)
 				Enum.AutomaticSize.Y,
 
 			ScrollBarThickness = 2,
+
+			ScrollBarImageColor3 =
+				Colors.Stroke,
+
+			ZIndex = 3,
 
 			Parent = sidebar
 		})
@@ -3602,6 +4261,8 @@ local function buildMainMenu(mode)
 
 		Parent = navHolder
 	})
+
+	-- Content
 
 	local content =
 		create("Frame", {
@@ -3621,20 +4282,34 @@ local function buildMainMenu(mode)
 					0
 				),
 
+			ZIndex = 2,
+
 			Parent = mainFrame
 		})
 
 	local header =
 		create("Frame", {
-			BackgroundTransparency = 1,
+			BackgroundColor3 =
+				Colors.Card,
+
+			BackgroundTransparency =
+				0.72,
+
+			Position =
+				UDim2.fromOffset(
+					0,
+					0
+				),
 
 			Size =
 				UDim2.new(
 					1,
 					0,
 					0,
-					58
+					64
 				),
+
+			ZIndex = 3,
 
 			Parent = content
 		})
@@ -3644,22 +4319,23 @@ local function buildMainMenu(mode)
 
 		Position =
 			UDim2.fromOffset(
-				16,
+				18,
 				9
 			),
 
 		Size =
 			UDim2.new(
 				1,
-				-100,
+				-110,
 				0,
-				24
+				25
 			),
 
 		Font =
 			Enum.Font.GothamBold,
 
-		Text = "THH MENU",
+		Text =
+			"THH MENU",
 
 		TextColor3 =
 			Colors.Text,
@@ -3668,6 +4344,8 @@ local function buildMainMenu(mode)
 
 		TextXAlignment =
 			Enum.TextXAlignment.Left,
+
+		ZIndex = 4,
 
 		Parent = header
 	})
@@ -3678,16 +4356,16 @@ local function buildMainMenu(mode)
 
 			Position =
 				UDim2.fromOffset(
-					16,
-					33
+					18,
+					35
 				),
 
 			Size =
 				UDim2.new(
 					1,
-					-100,
+					-110,
 					0,
-					18
+					17
 				),
 
 			Font =
@@ -3703,13 +4381,18 @@ local function buildMainMenu(mode)
 			TextXAlignment =
 				Enum.TextXAlignment.Left,
 
+			ZIndex = 4,
+
 			Parent = header
 		})
 
-	local close =
+	local hideButton =
 		create("TextButton", {
 			BackgroundColor3 =
 				Colors.Card,
+
+			BackgroundTransparency =
+				0.26,
 
 			AnchorPoint =
 				Vector2.new(
@@ -3720,15 +4403,15 @@ local function buildMainMenu(mode)
 			Position =
 				UDim2.new(
 					1,
-					-12,
+					-14,
 					0,
-					11
+					14
 				),
 
 			Size =
 				UDim2.fromOffset(
-					34,
-					34
+					36,
+					36
 				),
 
 			Font =
@@ -3737,14 +4420,23 @@ local function buildMainMenu(mode)
 			Text = "—",
 
 			TextColor3 =
-				Colors.SubText,
+				Colors.Text,
 
-			TextSize = 15,
+			TextSize = 17,
+
+			ZIndex = 5,
 
 			Parent = header
 		})
 
-	corner(close, 7)
+	corner(hideButton, 10)
+
+	stroke(
+		hideButton,
+		Colors.Stroke,
+		0.7,
+		1
+	)
 
 	local pageHolder =
 		create("Frame", {
@@ -3753,7 +4445,7 @@ local function buildMainMenu(mode)
 			Position =
 				UDim2.fromOffset(
 					0,
-					58
+					64
 				),
 
 			Size =
@@ -3761,8 +4453,10 @@ local function buildMainMenu(mode)
 					1,
 					0,
 					1,
-					-58
+					-64
 				),
+
+			ZIndex = 3,
 
 			Parent = content
 		})
@@ -3794,17 +4488,22 @@ local function buildMainMenu(mode)
 					and 7
 					or 4,
 
+				ScrollBarImageColor3 =
+					Colors.Stroke,
+
 				Visible = false,
+
+				ZIndex = 3,
 
 				Parent = pageHolder
 			})
 
 		padding(
 			page,
-			12,
-			12,
-			12,
-			12
+			14,
+			14,
+			14,
+			14
 		)
 
 		create("UIListLayout", {
@@ -3823,24 +4522,39 @@ local function buildMainMenu(mode)
 	end
 
 	local function setPage(name)
-		for pageName, page in pairs(pages) do
+		for pageName, page in pairs(
+			pages
+		) do
 			page.Visible =
 				pageName == name
 		end
 
-		for navName, button in pairs(navButtons) do
+		for navName, button in pairs(
+			navButtons
+		) do
 			local selected =
 				navName == name
 
-			button.BackgroundColor3 =
-				selected
-				and Colors.AccentDark
-				or Colors.Sidebar
+			tween(
+				button,
+				0.12,
+				{
+					BackgroundColor3 =
+						selected
+						and Colors.Card
+						or Colors.Sidebar,
 
-			button.TextColor3 =
-				selected
-				and Colors.Accent
-				or Colors.SubText
+					BackgroundTransparency =
+						selected
+						and 0.18
+						or 1,
+
+					TextColor3 =
+						selected
+						and Colors.Text
+						or Colors.SubText
+				}
+			)
 		end
 
 		pageTitle.Text = name
@@ -3851,6 +4565,8 @@ local function buildMainMenu(mode)
 			create("TextButton", {
 				BackgroundColor3 =
 					Colors.Sidebar,
+
+				BackgroundTransparency = 1,
 
 				BorderSizePixel = 0,
 
@@ -3872,10 +4588,12 @@ local function buildMainMenu(mode)
 				TextColor3 =
 					Colors.SubText,
 
-				TextSize = 12,
+				TextSize = 11,
 
 				TextXAlignment =
 					Enum.TextXAlignment.Left,
+
+				ZIndex = 4,
 
 				Parent = navHolder
 			})
@@ -3883,12 +4601,12 @@ local function buildMainMenu(mode)
 		padding(
 			button,
 			12,
-			5,
+			8,
 			0,
 			0
 		)
 
-		corner(button, 7)
+		corner(button, 9)
 
 		track(
 			button.MouseButton1Click:Connect(function()
@@ -3909,6 +4627,11 @@ local function buildMainMenu(mode)
 				BackgroundColor3 =
 					Colors.Card,
 
+				BackgroundTransparency =
+					0.26,
+
+				BorderSizePixel = 0,
+
 				Size =
 					UDim2.new(
 						1,
@@ -3920,15 +4643,17 @@ local function buildMainMenu(mode)
 				AutomaticSize =
 					Enum.AutomaticSize.Y,
 
+				ZIndex = 4,
+
 				Parent = parent
 			})
 
-		corner(frame, 9)
+		corner(frame, 13)
 
 		stroke(
 			frame,
 			Colors.Stroke,
-			0.2,
+			0.67,
 			1
 		)
 
@@ -3944,7 +4669,7 @@ local function buildMainMenu(mode)
 			Padding =
 				UDim.new(
 					0,
-					7
+					8
 				),
 
 			Parent = frame
@@ -3973,6 +4698,8 @@ local function buildMainMenu(mode)
 
 			TextXAlignment =
 				Enum.TextXAlignment.Left,
+
+			ZIndex = 5,
 
 			Parent = frame
 		})
@@ -4007,6 +4734,8 @@ local function buildMainMenu(mode)
 				TextXAlignment =
 					Enum.TextXAlignment.Left,
 
+				ZIndex = 5,
+
 				Parent = frame
 			})
 		end
@@ -4025,7 +4754,12 @@ local function buildMainMenu(mode)
 		local button =
 			create("TextButton", {
 				BackgroundColor3 =
-					Colors.Background,
+					Colors.CardDark,
+
+				BackgroundTransparency =
+					0.38,
+
+				BorderSizePixel = 0,
 
 				Size =
 					UDim2.new(
@@ -4033,16 +4767,25 @@ local function buildMainMenu(mode)
 						0,
 						0,
 						phoneMode
-							and 60
-							or 48
+							and 61
+							or 50
 					),
 
 				Text = "",
 
+				ZIndex = 5,
+
 				Parent = parent
 			})
 
-		corner(button, 7)
+		corner(button, 10)
+
+		stroke(
+			button,
+			Colors.Stroke,
+			0.8,
+			1
+		)
 
 		create("TextLabel", {
 			BackgroundTransparency = 1,
@@ -4056,7 +4799,7 @@ local function buildMainMenu(mode)
 			Size =
 				UDim2.new(
 					1,
-					-85,
+					-88,
 					0,
 					20
 				),
@@ -4074,6 +4817,8 @@ local function buildMainMenu(mode)
 			TextXAlignment =
 				Enum.TextXAlignment.Left,
 
+			ZIndex = 6,
+
 			Parent = button
 		})
 
@@ -4083,13 +4828,13 @@ local function buildMainMenu(mode)
 			Position =
 				UDim2.fromOffset(
 					12,
-					27
+					28
 				),
 
 			Size =
 				UDim2.new(
 					1,
-					-90,
+					-94,
 					0,
 					18
 				),
@@ -4110,13 +4855,22 @@ local function buildMainMenu(mode)
 			TextXAlignment =
 				Enum.TextXAlignment.Left,
 
+			ZIndex = 6,
+
 			Parent = button
 		})
 
 		local switch =
 			create("Frame", {
 				BackgroundColor3 =
-					Colors.Stroke,
+					Color3.fromRGB(
+						116,
+						119,
+						127
+					),
+
+				BackgroundTransparency =
+					0.2,
 
 				AnchorPoint =
 					Vector2.new(
@@ -4134,19 +4888,21 @@ local function buildMainMenu(mode)
 
 				Size =
 					UDim2.fromOffset(
-						44,
-						24
+						46,
+						25
 					),
+
+				ZIndex = 6,
 
 				Parent = button
 			})
 
-		corner(switch, 12)
+		corner(switch, 14)
 
 		local knob =
 			create("Frame", {
 				BackgroundColor3 =
-					Colors.SubText,
+					Colors.Text,
 
 				AnchorPoint =
 					Vector2.new(
@@ -4157,7 +4913,7 @@ local function buildMainMenu(mode)
 				Position =
 					UDim2.new(
 						0,
-						12,
+						12.5,
 						0.5,
 						0
 					),
@@ -4168,10 +4924,12 @@ local function buildMainMenu(mode)
 						18
 					),
 
+				ZIndex = 7,
+
 				Parent = switch
 			})
 
-		corner(knob, 9)
+		corner(knob, 10)
 
 		track(
 			button.MouseButton1Click:Connect(function()
@@ -4179,30 +4937,46 @@ local function buildMainMenu(mode)
 				enabled =
 					not enabled
 
-				switch.BackgroundColor3 =
-					enabled
-						and Colors.AccentDark
-						or Colors.Stroke
+				tween(
+					switch,
+					0.13,
+					{
+						BackgroundColor3 =
+							enabled
+							and Colors.AccentDark
+							or Color3.fromRGB(
+								116,
+								119,
+								127
+							)
+					}
+				)
 
-				knob.BackgroundColor3 =
-					enabled
-						and Colors.Accent
-						or Colors.SubText
+				tween(
+					knob,
+					0.13,
+					{
+						Position =
+							enabled
+							and UDim2.new(
+								1,
+								-12.5,
+								0.5,
+								0
+							)
+							or UDim2.new(
+								0,
+								12.5,
+								0.5,
+								0
+							),
 
-				knob.Position =
-					enabled
-						and UDim2.new(
-							1,
-							-12,
-							0.5,
-							0
-						)
-						or UDim2.new(
-							0,
-							12,
-							0.5,
-							0
-						)
+						BackgroundColor3 =
+							enabled
+							and Colors.Accent
+							or Colors.Text
+					}
+				)
 
 				callback(enabled)
 			end)
@@ -4219,22 +4993,40 @@ local function buildMainMenu(mode)
 		local button =
 			create("TextButton", {
 				BackgroundColor3 =
-					Colors.Background,
+					Colors.CardDark,
+
+				BackgroundTransparency =
+					0.38,
+
+				BorderSizePixel = 0,
 
 				Size =
 					UDim2.new(
 						1,
 						0,
 						0,
-						48
+						50
 					),
 
 				Text = "",
 
+				ZIndex = 5,
+
 				Parent = parent
 			})
 
-		corner(button, 7)
+		corner(button, 10)
+
+		stroke(
+			button,
+			danger
+				and Colors.Danger
+				or Colors.Stroke,
+			danger
+				and 0.6
+				or 0.8,
+			1
+		)
 
 		create("TextLabel", {
 			BackgroundTransparency = 1,
@@ -4268,6 +5060,8 @@ local function buildMainMenu(mode)
 			TextXAlignment =
 				Enum.TextXAlignment.Left,
 
+			ZIndex = 6,
+
 			Parent = button
 		})
 
@@ -4277,7 +5071,7 @@ local function buildMainMenu(mode)
 			Position =
 				UDim2.fromOffset(
 					12,
-					27
+					28
 				),
 
 			Size =
@@ -4301,6 +5095,8 @@ local function buildMainMenu(mode)
 			TextXAlignment =
 				Enum.TextXAlignment.Left,
 
+			ZIndex = 6,
+
 			Parent = button
 		})
 
@@ -4310,6 +5106,8 @@ local function buildMainMenu(mode)
 			)
 		)
 	end
+
+	-- Navigation
 
 	createNav("Home")
 	createNav("Mods")
@@ -4339,20 +5137,22 @@ local function buildMainMenu(mode)
 	section(
 		home,
 		"welcome to THH Growers",
-		"optimized pickup queues + camera hidden teleports"
+		"Light gray glass UI • optimized interaction system"
 	)
+
+	-- Mods
 
 	local farming =
 		section(
 			mods,
 			"Farming",
-			"optimized farming and selling"
+			"Hay collection and selling"
 		)
 
 	createToggle(
 		farming,
 		"Auto Farm",
-		"4 HayPieces → sell → repeat",
+		"Pick 4 HayPieces → sell → repeat",
 		function(state)
 
 			if state then
@@ -4366,7 +5166,7 @@ local function buildMainMenu(mode)
 	createToggle(
 		farming,
 		"Auto Pick Up Hay",
-		"automatic HayPiece pickup",
+		"Automatically picks up HayPiece",
 		function(state)
 
 			if state then
@@ -4380,7 +5180,7 @@ local function buildMainMenu(mode)
 	createToggle(
 		farming,
 		"Auto Sell",
-		"TP to SellPart + click + return",
+		"TP to SellPart → click → return",
 		function(state)
 
 			if state then
@@ -4394,7 +5194,7 @@ local function buildMainMenu(mode)
 	createToggle(
 		farming,
 		"No Pickup Cooldown",
-		"reduces local THH pickup waits",
+		"Reduces local THH pickup delay",
 		function(state)
 
 			noPickupCooldownEnabled =
@@ -4407,27 +5207,26 @@ local function buildMainMenu(mode)
 	createToggle(
 		farming,
 		"Inf Range",
-		"far pickups with camera lock",
+		"Far pickup with hidden camera teleport",
 		function(state)
 
-			infRangeEnabled =
-				state
+			infRangeEnabled = state
 
 			refreshCachedSettings()
 		end
 	)
 
-	local specials =
+	local pickups =
 		section(
 			mods,
 			"Special Pickups",
-			"strong click burst + hidden camera teleport"
+			"Automatic special item collection"
 		)
 
 	createToggle(
-		specials,
+		pickups,
 		"Auto Pick Up Diamond",
-		"TP close → front → 8 clicks",
+		"TP close → move Diamond in front → click",
 		function(state)
 
 			if state then
@@ -4439,9 +5238,9 @@ local function buildMainMenu(mode)
 	)
 
 	createToggle(
-		specials,
+		pickups,
 		"Auto Pick Up Color Hay",
-		"color changes → TP close → front → 8 clicks",
+		"Detect changing HayPiece → pickup",
 		function(state)
 
 			if state then
@@ -4452,17 +5251,19 @@ local function buildMainMenu(mode)
 		end
 	)
 
+	-- Player
+
 	local movement =
 		section(
 			player,
 			"Movement",
-			"player movement mods"
+			"Player movement modifications"
 		)
 
 	createToggle(
 		movement,
 		"Speed",
-		"WalkSpeed 50",
+		"WalkSpeed = 50",
 		function(state)
 			setSpeed(state)
 		end
@@ -4471,7 +5272,7 @@ local function buildMainMenu(mode)
 	createToggle(
 		movement,
 		"Infinite Jump",
-		"jump while airborne",
+		"Jump again while airborne",
 		function(state)
 			infiniteJumpEnabled =
 				state
@@ -4481,7 +5282,7 @@ local function buildMainMenu(mode)
 	createToggle(
 		movement,
 		"Unlock 3rd Person",
-		"Classic camera zoom",
+		"Classic camera with extended zoom",
 		function(state)
 			setThirdPerson(state)
 		end
@@ -4490,30 +5291,32 @@ local function buildMainMenu(mode)
 	createToggle(
 		movement,
 		"Fly",
-		"WASD + Space/Ctrl",
+		"WASD + Space/Ctrl on PC",
 		function(state)
 			setFly(state)
 		end
 	)
 
-	local events =
+	-- Event
+
+	local eventTools =
 		section(
 			event,
 			"Events",
-			"event automation"
+			"UFO, Needle and Key automation"
 		)
 
 	createAction(
-		events,
+		eventTools,
 		"Start UFO Event",
-		"TP to UfoButtenPart and click",
+		"TP to UfoButtenPart and click it",
 		startUfoEvent
 	)
 
 	createToggle(
-		events,
+		eventTools,
 		"Auto Find Needle",
-		"auto interact when Needle appears",
+		"Needle / Hay Needle / Haystack Needle / Hidden Needle",
 		function(state)
 
 			if state then
@@ -4525,9 +5328,9 @@ local function buildMainMenu(mode)
 	)
 
 	createToggle(
-		events,
+		eventTools,
 		"Auto Find Key",
-		"auto interact when Key appears",
+		"Key / Basement Key / Hay Key / Hidden Key",
 		function(state)
 
 			if state then
@@ -4541,14 +5344,16 @@ local function buildMainMenu(mode)
 	local ids =
 		section(
 			event,
-			"Place IDs",
-			"Search For The Needle"
+			"Search For The Needle",
+			"Place IDs"
 		)
 
 	createAction(
 		ids,
 		"Copy Main Place ID",
-		tostring(SEARCH_FOR_NEEDLE_PLACE_ID),
+		tostring(
+			SEARCH_FOR_NEEDLE_PLACE_ID
+		),
 		function()
 			copyText(
 				SEARCH_FOR_NEEDLE_PLACE_ID
@@ -4559,7 +5364,9 @@ local function buildMainMenu(mode)
 	createAction(
 		ids,
 		"Copy Farmhouse ID",
-		tostring(FARMHOUSE_PLACE_ID),
+		tostring(
+			FARMHOUSE_PLACE_ID
+		),
 		function()
 			copyText(
 				FARMHOUSE_PLACE_ID
@@ -4570,7 +5377,9 @@ local function buildMainMenu(mode)
 	createAction(
 		ids,
 		"Copy Basement ID",
-		tostring(BASEMENT_PLACE_ID),
+		tostring(
+			BASEMENT_PLACE_ID
+		),
 		function()
 			copyText(
 				BASEMENT_PLACE_ID
@@ -4578,17 +5387,19 @@ local function buildMainMenu(mode)
 		end
 	)
 
+	-- Utility
+
 	local tools =
 		section(
 			utility,
 			"Tools",
-			"utility mods"
+			"Useful THH tools"
 		)
 
 	createToggle(
 		tools,
 		"Part Name Hover",
-		"shows exact hovered part name",
+		"Shows the exact part under your cursor",
 		function(state)
 
 			if state then
@@ -4602,11 +5413,10 @@ local function buildMainMenu(mode)
 	createToggle(
 		tools,
 		"Anti AFK",
-		"prevents normal idle kicks",
+		"Prevents normal idle kicks",
 		function(state)
 
-			antiAfkEnabled =
-				state
+			antiAfkEnabled = state
 
 			if antiAfkConnection then
 				antiAfkConnection:Disconnect()
@@ -4629,24 +5439,24 @@ local function buildMainMenu(mode)
 							return
 						end
 
-						pcall(function()
-							VirtualUser:CaptureController()
+						VirtualUser:CaptureController()
 
-							VirtualUser:Button2Down(
-								Vector2.zero,
-								Camera.CFrame
-							)
+						VirtualUser:Button2Down(
+							Vector2.zero,
+							Camera.CFrame
+						)
 
-							task.wait(0.05)
+						task.wait(0.05)
 
-							VirtualUser:Button2Up(
-								Vector2.zero,
-								Camera.CFrame
-							)
-						end)
+						VirtualUser:Button2Up(
+							Vector2.zero,
+							Camera.CFrame
+						)
 					end)
 
-				track(antiAfkConnection)
+				track(
+					antiAfkConnection
+				)
 			end
 		end
 	)
@@ -4655,13 +5465,13 @@ local function buildMainMenu(mode)
 		section(
 			utility,
 			"Server",
-			"server actions"
+			"Server and menu actions"
 		)
 
 	createAction(
 		server,
 		"Rejoin Server",
-		"rejoin current server",
+		"Rejoin your current server",
 		function()
 
 			if game.JobId ~= "" then
@@ -4682,7 +5492,7 @@ local function buildMainMenu(mode)
 	createAction(
 		server,
 		"Reset Character",
-		"reset character",
+		"Reset your character",
 		function()
 
 			local humanoid =
@@ -4697,17 +5507,21 @@ local function buildMainMenu(mode)
 	createAction(
 		server,
 		"Copy Server ID",
-		"copy current JobId",
+		"Copy current JobId",
 		function()
-			copyText(game.JobId)
+
+			copyText(
+				game.JobId
+			)
 		end
 	)
 
 	createAction(
 		server,
 		"Leave Server",
-		"leave current server",
+		"Leave the current server",
 		function()
+
 			LocalPlayer:Kick(
 				"Left with THH HUB"
 			)
@@ -4718,27 +5532,31 @@ local function buildMainMenu(mode)
 	createAction(
 		server,
 		"Unload Menu",
-		"turn off every mod",
+		"Disable every mod and remove THH HUB",
 		function()
+
 			cleanupAll(true)
 		end,
 		true
 	)
 
+	-- Updates
+
 	section(
 		updates,
-		"09/09/26",
-		"• Inf Range camera lock\n"
-		.. "• Color Hay camera lock\n"
-		.. "• stronger controlled click bursts\n"
-		.. "• Auto Sell no camera lock\n"
-		.. "• Auto Farm = 4 Hay then sell\n"
-		.. "• object caches instead of repeated Workspace scans\n"
-		.. "• interaction queue prevents TP fighting and spikes"
+		"UI Update • 09/09/26",
+		"• lighter gray transparent menu\n"
+		.. "• cleaner glass-style cards\n"
+		.. "• softer borders and controls\n"
+		.. "• real monitor-style PC selector\n"
+		.. "• real smartphone-style Phone selector\n"
+		.. "• improved sidebar/profile area\n"
+		.. "• cleaner toggles and sections"
 	)
 
 	local function setVisible(value)
-		mainFrame.Visible = value
+		mainFrame.Visible =
+			value
 
 		if phoneMode
 			and floatingButton then
@@ -4749,7 +5567,7 @@ local function buildMainMenu(mode)
 	end
 
 	track(
-		close.MouseButton1Click:Connect(function()
+		hideButton.MouseButton1Click:Connect(function()
 			setVisible(false)
 		end)
 	)
@@ -4759,6 +5577,9 @@ local function buildMainMenu(mode)
 			create("ImageButton", {
 				BackgroundColor3 =
 					Colors.Card,
+
+				BackgroundTransparency =
+					0.18,
 
 				AnchorPoint =
 					Vector2.new(
@@ -4771,13 +5592,13 @@ local function buildMainMenu(mode)
 						0.5,
 						0,
 						0,
-						10
+						12
 					),
 
 				Size =
 					UDim2.fromOffset(
-						50,
-						50
+						52,
+						52
 					),
 
 				Image = GAME_ICON,
@@ -4794,7 +5615,14 @@ local function buildMainMenu(mode)
 
 		corner(
 			floatingButton,
-			14
+			15
+		)
+
+		stroke(
+			floatingButton,
+			Colors.Stroke,
+			0.45,
+			1.2
 		)
 
 		track(
@@ -4813,6 +5641,7 @@ local function buildMainMenu(mode)
 				input,
 				processed
 			)
+
 				if processed then
 					return
 				end
@@ -4839,20 +5668,22 @@ local function buildMainMenu(mode)
 	)
 end
 
---// DEVICE CHOOSER
+--==================================================
+-- DEVICE CHOOSER
+--==================================================
 
 local function showDeviceChooser()
 	local overlay =
 		create("Frame", {
 			BackgroundColor3 =
 				Color3.fromRGB(
-					5,
-					6,
-					8
+					20,
+					22,
+					26
 				),
 
 			BackgroundTransparency =
-				0.3,
+				0.38,
 
 			Size =
 				UDim2.fromScale(
@@ -4879,41 +5710,48 @@ local function showDeviceChooser()
 
 			Size =
 				UDim2.fromOffset(
-					440,
-					260
+					500,
+					335
 				),
 
 			BackgroundColor3 =
-				Glass.Panel,
+				Colors.Main,
 
 			BackgroundTransparency =
-				0.25,
+				0.16,
+
+			BorderSizePixel = 0,
 
 			Parent = overlay
 		})
 
-	corner(panel, 14)
+	corner(
+		panel,
+		18
+	)
 
 	stroke(
 		panel,
-		Glass.Stroke,
-		0.65,
-		1
+		Colors.Stroke,
+		0.42,
+		1.2
 	)
+
+	addGlassGradient(panel)
 
 	create("TextLabel", {
 		BackgroundTransparency = 1,
 
 		Position =
 			UDim2.fromOffset(
-				20,
-				17
+				24,
+				18
 			),
 
 		Size =
 			UDim2.new(
 				1,
-				-40,
+				-48,
 				0,
 				28
 			),
@@ -4921,12 +5759,16 @@ local function showDeviceChooser()
 		Font =
 			Enum.Font.GothamBold,
 
-		Text = "what are you on?",
+		Text =
+			"what are you on?",
 
 		TextColor3 =
-			Glass.Text,
+			Colors.Text,
 
-		TextSize = 19,
+		TextSize = 20,
+
+		TextXAlignment =
+			Enum.TextXAlignment.Center,
 
 		Parent = panel
 	})
@@ -4936,14 +5778,14 @@ local function showDeviceChooser()
 
 		Position =
 			UDim2.fromOffset(
-				20,
-				47
+				24,
+				50
 			),
 
 		Size =
 			UDim2.new(
 				1,
-				-40,
+				-48,
 				0,
 				20
 			),
@@ -4951,12 +5793,13 @@ local function showDeviceChooser()
 		Font =
 			Enum.Font.Gotham,
 
-		Text = "pick pc or phone",
+		Text =
+			"pick pc or phone",
 
 		TextColor3 =
-			Glass.SubText,
+			Colors.SubText,
 
-		TextSize = 12,
+		TextSize = 11,
 
 		Parent = panel
 	})
@@ -4964,86 +5807,266 @@ local function showDeviceChooser()
 	local pc =
 		create("TextButton", {
 			BackgroundColor3 =
-				Glass.Card,
+				Colors.Card,
 
 			BackgroundTransparency =
-				0.35,
+				0.26,
 
 			Position =
 				UDim2.fromOffset(
-					25,
-					85
+					24,
+					88
 				),
 
 			Size =
 				UDim2.fromOffset(
-					185,
-					145
+					215,
+					215
 				),
 
-			Font =
-				Enum.Font.GothamBold,
-
-			Text = "🖥\nPC",
-
-			TextColor3 =
-				Glass.Text,
-
-			TextSize = 20,
+			Text = "",
 
 			Parent = panel
 		})
 
-	corner(pc, 12)
+	corner(pc, 15)
+
+	stroke(
+		pc,
+		Colors.Stroke,
+		0.58,
+		1
+	)
+
+	buildPcDrawing(pc)
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+
+		Position =
+			UDim2.new(
+				0,
+				0,
+				1,
+				-57
+			),
+
+		Size =
+			UDim2.new(
+				1,
+				0,
+				0,
+				24
+			),
+
+		Font =
+			Enum.Font.GothamBold,
+
+		Text = "PC",
+
+		TextColor3 =
+			Colors.Text,
+
+		TextSize = 16,
+
+		Parent = pc
+	})
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+
+		Position =
+			UDim2.new(
+				0,
+				0,
+				1,
+				-33
+			),
+
+		Size =
+			UDim2.new(
+				1,
+				0,
+				0,
+				18
+			),
+
+		Font =
+			Enum.Font.Gotham,
+
+		Text =
+			"Desktop controls",
+
+		TextColor3 =
+			Colors.SubText,
+
+		TextSize = 9,
+
+		Parent = pc
+	})
 
 	local phone =
 		create("TextButton", {
 			BackgroundColor3 =
-				Glass.Card,
+				Colors.Card,
 
 			BackgroundTransparency =
-				0.35,
+				0.26,
 
 			Position =
 				UDim2.fromOffset(
-					230,
-					85
+					261,
+					88
 				),
 
 			Size =
 				UDim2.fromOffset(
-					185,
-					145
+					215,
+					215
 				),
 
-			Font =
-				Enum.Font.GothamBold,
-
-			Text = "▯\nPHONE",
-
-			TextColor3 =
-				Glass.Text,
-
-			TextSize = 20,
+			Text = "",
 
 			Parent = panel
 		})
 
-	corner(phone, 12)
+	corner(phone, 15)
 
-	local chosen = false
+	stroke(
+		phone,
+		Colors.Stroke,
+		0.58,
+		1
+	)
+
+	buildPhoneDrawing(phone)
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+
+		Position =
+			UDim2.new(
+				0,
+				0,
+				1,
+				-57
+			),
+
+		Size =
+			UDim2.new(
+				1,
+				0,
+				0,
+				24
+			),
+
+		Font =
+			Enum.Font.GothamBold,
+
+		Text = "PHONE",
+
+		TextColor3 =
+			Colors.Text,
+
+		TextSize = 16,
+
+		Parent = phone
+	})
+
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+
+		Position =
+			UDim2.new(
+				0,
+				0,
+				1,
+				-33
+			),
+
+		Size =
+			UDim2.new(
+				1,
+				0,
+				0,
+				18
+			),
+
+		Font =
+			Enum.Font.Gotham,
+
+		Text =
+			"Touch controls",
+
+		TextColor3 =
+			Colors.SubText,
+
+		TextSize = 9,
+
+		Parent = phone
+	})
+
+	local selected = false
 
 	local function choose(mode)
-		if chosen then
+		if selected then
 			return
 		end
 
-		chosen = true
+		selected = true
 
 		overlay:Destroy()
 
 		buildMainMenu(mode)
 	end
+
+	track(
+		pc.MouseEnter:Connect(function()
+			tween(
+				pc,
+				0.13,
+				{
+					BackgroundTransparency = 0.15
+				}
+			)
+		end)
+	)
+
+	track(
+		pc.MouseLeave:Connect(function()
+			tween(
+				pc,
+				0.13,
+				{
+					BackgroundTransparency = 0.26
+				}
+			)
+		end)
+	)
+
+	track(
+		phone.MouseEnter:Connect(function()
+			tween(
+				phone,
+				0.13,
+				{
+					BackgroundTransparency = 0.15
+				}
+			)
+		end)
+	)
+
+	track(
+		phone.MouseLeave:Connect(function()
+			tween(
+				phone,
+				0.13,
+				{
+					BackgroundTransparency = 0.26
+				}
+			)
+		end)
+	)
 
 	track(
 		pc.MouseButton1Click:Connect(function()
@@ -5058,20 +6081,22 @@ local function showDeviceChooser()
 	)
 end
 
---// KEY GUI
+--==================================================
+-- KEY SYSTEM
+--==================================================
 
 local function showKeySystem()
 	local overlay =
 		create("Frame", {
 			BackgroundColor3 =
 				Color3.fromRGB(
-					7,
-					8,
-					10
+					18,
+					20,
+					24
 				),
 
 			BackgroundTransparency =
-				0.3,
+				0.38,
 
 			Size =
 				UDim2.fromScale(
@@ -5098,54 +6123,65 @@ local function showKeySystem()
 
 			Size =
 				UDim2.fromOffset(
-					410,
-					385
+					420,
+					410
 				),
 
 			BackgroundColor3 =
-				Glass.Panel,
+				Colors.Main,
 
 			BackgroundTransparency =
-				0.24,
+				0.15,
+
+			BorderSizePixel = 0,
 
 			Parent = overlay
 		})
 
-	corner(panel, 17)
+	corner(panel, 18)
 
 	stroke(
 		panel,
-		Glass.Stroke,
-		0.68,
-		1
+		Colors.Stroke,
+		0.42,
+		1.2
 	)
+
+	addGlassGradient(panel)
 
 	local header =
 		create("Frame", {
 			BackgroundColor3 =
-				Glass.Card,
+				Colors.Card,
 
 			BackgroundTransparency =
-				0.6,
+				0.28,
 
 			Position =
 				UDim2.fromOffset(
-					15,
-					15
+					16,
+					16
 				),
 
 			Size =
 				UDim2.new(
 					1,
-					-30,
+					-32,
 					0,
-					94
+					96
 				),
 
 			Parent = panel
 		})
 
-	corner(header, 13)
+	corner(header, 14)
+
+	stroke(
+		header,
+		Colors.Stroke,
+		0.65,
+		1
+	)
 
 	makeDraggable(
 		panel,
@@ -5155,12 +6191,12 @@ local function showKeySystem()
 	local icon =
 		create("ImageLabel", {
 			BackgroundColor3 =
-				Glass.Dark,
+				Colors.CardDark,
 
 			Position =
 				UDim2.fromOffset(
-					17,
-					14
+					16,
+					15
 				),
 
 			Size =
@@ -5169,7 +6205,8 @@ local function showKeySystem()
 					66
 				),
 
-			Image = GAME_ICON,
+			Image =
+				GAME_ICON,
 
 			ScaleType =
 				Enum.ScaleType.Crop,
@@ -5177,21 +6214,21 @@ local function showKeySystem()
 			Parent = header
 		})
 
-	corner(icon, 13)
+	corner(icon, 14)
 
 	create("TextLabel", {
 		BackgroundTransparency = 1,
 
 		Position =
 			UDim2.fromOffset(
-				100,
-				18
+				98,
+				20
 			),
 
 		Size =
 			UDim2.new(
 				1,
-				-120,
+				-115,
 				0,
 				30
 			),
@@ -5202,7 +6239,7 @@ local function showKeySystem()
 		Text = "THH HUB",
 
 		TextColor3 =
-			Glass.Text,
+			Colors.Text,
 
 		TextSize = 23,
 
@@ -5217,14 +6254,14 @@ local function showKeySystem()
 
 		Position =
 			UDim2.fromOffset(
-				100,
-				50
+				98,
+				52
 			),
 
 		Size =
 			UDim2.new(
 				1,
-				-120,
+				-115,
 				0,
 				22
 			),
@@ -5232,12 +6269,13 @@ local function showKeySystem()
 		Font =
 			Enum.Font.Gotham,
 
-		Text = "Authentication",
+		Text =
+			"Authentication",
 
 		TextColor3 =
-			Glass.SubText,
+			Colors.SubText,
 
-		TextSize = 12,
+		TextSize = 11,
 
 		TextXAlignment =
 			Enum.TextXAlignment.Left,
@@ -5245,30 +6283,63 @@ local function showKeySystem()
 		Parent = header
 	})
 
+	create("TextLabel", {
+		BackgroundTransparency = 1,
+
+		Position =
+			UDim2.fromOffset(
+				26,
+				134
+			),
+
+		Size =
+			UDim2.new(
+				1,
+				-52,
+				0,
+				20
+			),
+
+		Font =
+			Enum.Font.GothamSemibold,
+
+		Text =
+			"Access Key",
+
+		TextColor3 =
+			Colors.Text,
+
+		TextSize = 11,
+
+		TextXAlignment =
+			Enum.TextXAlignment.Left,
+
+		Parent = panel
+	})
+
 	local keyBox =
 		create("TextBox", {
 			BackgroundColor3 =
-				Glass.Dark,
+				Colors.Input,
 
 			BackgroundTransparency =
-				0.15,
+				0.16,
 
 			Position =
 				UDim2.fromOffset(
-					25,
-					145
+					26,
+					160
 				),
 
 			Size =
 				UDim2.new(
 					1,
-					-50,
+					-52,
 					0,
 					52
 				),
 
-			ClearTextOnFocus =
-				false,
+			ClearTextOnFocus = false,
 
 			Font =
 				Enum.Font.Gotham,
@@ -5276,37 +6347,61 @@ local function showKeySystem()
 			PlaceholderText =
 				"paste your key here...",
 
+			PlaceholderColor3 =
+				Colors.Muted,
+
 			Text = "",
 
 			TextColor3 =
-				Glass.Text,
+				Colors.Text,
 
 			TextSize = 12,
+
+			TextXAlignment =
+				Enum.TextXAlignment.Left,
 
 			Parent = panel
 		})
 
-	corner(keyBox, 10)
+	padding(
+		keyBox,
+		14,
+		14,
+		0,
+		0
+	)
 
-	local continue =
+	corner(keyBox, 11)
+
+	stroke(
+		keyBox,
+		Colors.Stroke,
+		0.72,
+		1
+	)
+
+	local continueButton =
 		create("TextButton", {
 			BackgroundColor3 =
 				Color3.fromRGB(
-					205,
-					208,
-					214
+					219,
+					222,
+					227
 				),
+
+			BackgroundTransparency =
+				0.02,
 
 			Position =
 				UDim2.fromOffset(
-					25,
-					215
+					26,
+					230
 				),
 
 			Size =
 				UDim2.new(
 					1,
-					-50,
+					-52,
 					0,
 					48
 				),
@@ -5318,9 +6413,9 @@ local function showKeySystem()
 
 			TextColor3 =
 				Color3.fromRGB(
-					35,
-					38,
-					43
+					45,
+					48,
+					54
 				),
 
 			TextSize = 12,
@@ -5328,26 +6423,29 @@ local function showKeySystem()
 			Parent = panel
 		})
 
-	corner(continue, 10)
+	corner(
+		continueButton,
+		11
+	)
 
-	local getKey =
+	local getKeyButton =
 		create("TextButton", {
 			BackgroundColor3 =
-				Glass.Card,
+				Colors.Card,
 
 			BackgroundTransparency =
-				0.4,
+				0.24,
 
 			Position =
 				UDim2.fromOffset(
-					25,
-					280
+					26,
+					294
 				),
 
 			Size =
 				UDim2.new(
 					1,
-					-50,
+					-52,
 					0,
 					46
 				),
@@ -5355,17 +6453,28 @@ local function showKeySystem()
 			Font =
 				Enum.Font.GothamSemibold,
 
-			Text = "Get Access Key",
+			Text =
+				"Get Access Key",
 
 			TextColor3 =
-				Glass.Text,
+				Colors.Text,
 
 			TextSize = 12,
 
 			Parent = panel
 		})
 
-	corner(getKey, 10)
+	corner(
+		getKeyButton,
+		11
+	)
+
+	stroke(
+		getKeyButton,
+		Colors.Stroke,
+		0.68,
+		1
+	)
 
 	local status =
 		create("TextLabel", {
@@ -5373,16 +6482,16 @@ local function showKeySystem()
 
 			Position =
 				UDim2.fromOffset(
-					25,
-					340
+					26,
+					357
 				),
 
 			Size =
 				UDim2.new(
 					1,
-					-50,
+					-52,
 					0,
-					24
+					30
 				),
 
 			Font =
@@ -5392,7 +6501,7 @@ local function showKeySystem()
 				"enter your key to continue",
 
 			TextColor3 =
-				Glass.SubText,
+				Colors.SubText,
 
 			TextSize = 10,
 
@@ -5403,21 +6512,30 @@ local function showKeySystem()
 		})
 
 	track(
-		getKey.MouseButton1Click:Connect(function()
+		getKeyButton.MouseButton1Click:Connect(function()
 
-			if copyText(GET_KEY_URL) then
+			if copyText(
+				GET_KEY_URL
+			) then
+
 				status.Text =
 					"Get Key link copied."
 
 				status.TextColor3 =
 					Colors.Accent
+			else
+				status.Text =
+					"Clipboard unavailable."
+
+				status.TextColor3 =
+					Colors.Danger
 			end
 		end)
 	)
 
 	local checking = false
 
-	local function checkKey()
+	local function check()
 		if checking then
 			return
 		end
@@ -5429,7 +6547,7 @@ local function showKeySystem()
 
 		if key == "" then
 			status.Text =
-				"Enter your key."
+				"Enter your access key."
 
 			status.TextColor3 =
 				Colors.Danger
@@ -5439,47 +6557,59 @@ local function showKeySystem()
 
 		checking = true
 
-		continue.Text =
+		continueButton.Text =
 			"Checking..."
+
+		status.Text =
+			"validating key..."
+
+		status.TextColor3 =
+			Colors.SubText
 
 		task.spawn(function()
 
 			local valid, result =
 				validateKey(key)
 
-			if valid then
-				continue.Text =
-					"Accepted"
+			if not panel.Parent then
+				return
+			end
 
+			if valid then
 				status.Text =
 					"key accepted"
 
 				status.TextColor3 =
 					Colors.Accent
 
+				continueButton.Text =
+					"Accepted"
+
 				task.wait(0.2)
 
 				overlay:Destroy()
 
 				showDeviceChooser()
-			else
-				checking = false
 
-				continue.Text =
-					"Continue"
-
-				status.Text =
-					result
-
-				status.TextColor3 =
-					Colors.Danger
+				return
 			end
+
+			checking = false
+
+			continueButton.Text =
+				"Continue"
+
+			status.Text =
+				result
+
+			status.TextColor3 =
+				Colors.Danger
 		end)
 	end
 
 	track(
-		continue.MouseButton1Click:Connect(
-			checkKey
+		continueButton.MouseButton1Click:Connect(
+			check
 		)
 	)
 
@@ -5488,7 +6618,7 @@ local function showKeySystem()
 			enterPressed
 		)
 			if enterPressed then
-				checkKey()
+				check()
 			end
 		end)
 	)
